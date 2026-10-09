@@ -209,6 +209,18 @@ hints = [["L 1", "start / pause"], ["M 2", "skip the phase"], ["R 3", "stop the 
 # key (the same label again restarts it) and its notification's title
 input = { prompt = "Minutes", default = "7", label = "Label", label_default = "Countdown", button = "Start", command = "lintel timer {value}m {label}" }
 
+# the session's commands; the button of the state it is in is marked
+[[module.buttons]]
+label = "Session"
+state = "{pomodoro.state}"
+items = [
+  { text = "󰐊 Start", value = "running", command = "lintel pomodoro start" },
+  { text = "󰏤 Pause", value = "paused", command = "lintel pomodoro pause" },
+  { text = "󰐊 Resume", command = "lintel pomodoro resume" },
+  { text = "󰒭 Skip", command = "lintel pomodoro skip" },
+  { text = "󰓛 Stop", value = "stopped", command = "lintel pomodoro stop" },
+]
+
 # the countdowns, one next to the other, each with its seconds and its
 # label; a right click stops that one. They start from the pomodoro card
 [[module]]

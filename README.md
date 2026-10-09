@@ -1,5 +1,22 @@
 # lintel
 
+## Author's note
+
+This project was born from the need to let an agent control my Linux
+box. That is why it runs on Arch and sway: it is cut to measure for my
+own setup, not a general-purpose bar. It has an MCP server for that
+agent, Jarvis: a customised Claude Code session that lives in
+`~/Agents/Jarvis`, with its own context files and log, and that starts
+with lintel's MCP server to see and drive the desktop.
+
+Keeping everything in one program also saves on prompts and tokens.
+The bar, the notifications, the windows and the outputs are already in
+one place, so one tool call returns the whole state, compact and
+structured, instead of the agent piecing it together from a string of
+shell commands, each to be written, run and read back.
+
+## What it is
+
 An event-driven bar for sway. One process, written in Rust on GTK 4 and
 gtk4-layer-shell, that is:
 
