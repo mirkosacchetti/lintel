@@ -480,15 +480,21 @@ pub fn build(
     popup.set_keyboard_mode(KeyboardMode::OnDemand);
     let card = Card::new(popup.clone(), cfg.bar.card_width, &cfg.bar.scripts);
 
-    let line = gtk::CenterBox::new();
+    // a plain box, the left side expanding: when the two sides together
+    // want more than the output, the box shares the shortage out, and a
+    // label with max_chars gives way down to its ellipsis. (A CenterBox
+    // gives each side its natural width and lets them overlap.)
+    let line = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     line.add_css_class("line");
     line.set_size_request(-1, cfg.bar.height);
     let left = gtk::Box::new(gtk::Orientation::Horizontal, 2);
     left.add_css_class("left");
+    left.set_hexpand(true);
+    left.set_halign(gtk::Align::Fill);
     let right = gtk::Box::new(gtk::Orientation::Horizontal, 2);
     right.add_css_class("right");
-    line.set_start_widget(Some(&left));
-    line.set_end_widget(Some(&right));
+    line.append(&left);
+    line.append(&right);
     bar.set_child(Some(&line));
 
     let hover = Rc::new(Hover {
@@ -653,7 +659,7 @@ fn build_module(
     index: usize,
     m: &Module,
     parent: &gtk::Box,
-    line: &gtk::CenterBox,
+    line: &gtk::Box,
     store: &Rc<Store>,
     owner: u32,
     scripts: &str,

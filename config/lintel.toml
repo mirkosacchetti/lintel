@@ -244,7 +244,8 @@ spacing = 4
 [[module]]
 name = "title"
 title = "Window"
-text = "| {sway.title}"
+text = "|  {sway.title}"
+hide_when = "|  "
 max_chars = 60
 info = "{sway.title}"
 click = "swaymsg floating toggle"
@@ -261,7 +262,9 @@ name = "mpris"
 side = "right"
 title = "Player"
 markup = true
-text = "{mpris.text}"
+# a separator from the title, gone with the player
+text = "| {mpris.text}"
+hide_when = "| "
 max_chars = 60
 info = "{mpris.info}"
 class = "{mpris.class}"
