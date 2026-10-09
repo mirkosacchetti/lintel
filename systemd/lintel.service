@@ -1,0 +1,15 @@
+# lintel as a user service: one bar per output, hotplugs followed by
+# itself. Start it from the compositor once WAYLAND_DISPLAY and SWAYSOCK
+# are in the user manager's environment (sway's config.d snippet
+# 50-systemd-user.conf imports them), e.g. with
+#   exec_always systemctl --user start lintel
+# The service brings it back if it dies; SIGTERM closes its listener
+# scripts. PATH: the mouse commands need lintel itself and the usual tools.
+[Unit]
+Description=lintel, an event-driven bar for sway
+
+[Service]
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+ExecStart=%h/.local/bin/lintel
+Restart=on-failure
+RestartSec=1

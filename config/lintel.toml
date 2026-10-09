@@ -1,0 +1,403 @@
+# lintel: the bar, the tray, the launcher and the notifications, event
+# driven. Copy to ~/.config/lintel/lintel.toml (style.css next to it).
+#
+# Sources give values, modules show them. No source here polls: the
+# native readers run only when a trigger fires (a kernel uevent, a D-Bus
+# signal, a netlink message, a sway event, a `lintel refresh`, or the
+# module's card opening); sway, the sound server and the player are
+# followed on their own events; the clock and the timers wake up exactly
+# when their text changes. See README.md for the module-by-module account.
+
+[bar]
+height = 28
+card_width = 360
+# scripts = "/path/to/your/scripts"   # $S in the commands
+hover_delay_ms = 120     # rest this long before a module's card opens
+leave_delay_ms = 150
+coalesce_ms = 100
+
+[picker]
+width = 560                           # the launcher, the window switcher, `lintel pick`
+rows = 8
+icon_size = 24
+terminal = "alacritty -e"             # for the entries that want one
+
+[pomodoro]
+work_minutes = 25
+short_break_minutes = 5
+long_break_minutes = 15
+pomodori_until_long = 4
+pomodori_per_session = 10
+display = "minutes"                   # "seconds" shows mm:ss and wakes every second
+on_phase_end = "pw-play /usr/share/sounds/freedesktop/stereo/complete.oga"
+
+# ---- sources: followed on their own events -----------------------------
+
+# sway's IPC read in-process: workspaces, mode and title, and the
+# scratchpad (as a second variable, `scratchpad`)
+[[source]]
+name = "sway"
+kind = "sway"
+initial = '{"workspaces": [], "mode": "default", "title": ""}'
+
+# the player, on playerctld's signals and the sound server's stream events
+[[source]]
+name = "mpris"
+kind = "mpris"
+initial = '{"text": "", "info": "", "class": ""}'
+
+# the default output and input, on the sound server's events
+[[source]]
+name = "audio"
+kind = "audio"
+initial = '{"sink": {"text": "", "info": ""}, "source": {"text": "", "info": ""}}'
+
+# the outputs, on sway's output events and ticks
+[[source]]
+name = "display"
+kind = "display"
+initial = '{"text": "", "info": ""}'
+
+# ---- sources: native readers, run on events --------------------------
+
+# wf-recorder: whatever starts or stops it says so (`lintel refresh
+# recording`); the card re-checks in case it crashed
+[[source]]
+name = "recording"
+kind = "command"
+command = "pgrep -x wf-recorder > /dev/null && echo ⏺ || true"
+triggers = ["refresh", "hover"]
+
+# the panel's backlight raises a uevent on every write and is read from
+# sysfs. An external monitor has no backlight: set `command` to a script
+# that reads it over DDC/CI and prints {text, info}; it runs on your own
+# writes (`lintel refresh brightness`), a screen pick (sway tick) and the
+# card opening
+[[source]]
+name = "brightness"
+kind = "brightness"
+initial = '{"text": "", "info": ""}'
+triggers = ["udev:backlight", "sway:tick,output", "refresh", "hover"]
+
+# gammastep is a user unit: systemd signals its ActiveState; the period
+# and temperature in the card are computed when it opens
+[[source]]
+name = "nightlight"
+kind = "nightlight"
+initial = '{"on": false, "info": ""}'
+triggers = ["dbus:session:org.freedesktop.systemd1:/org/freedesktop/systemd1/unit/gammastep_2eservice", "refresh", "hover"]
+
+# two switches' states for the controls card: Tailscale, read when the
+# card opens and after a switch; Syncthing's user unit, which signals its
+# changes
+[[source]]
+name = "tailscale"
+kind = "command"
+command = "tailscale status --json | jq -c '{on: (.BackendState == \"Running\"), info: .BackendState}'"
+initial = '{"on": false, "info": ""}'
+triggers = ["refresh", "hover"]
+
+[[source]]
+name = "syncthing"
+kind = "command"
+command = "systemctl --user is-active syncthing.service | jq -Rc '{on: (. == \"active\"), info: .}'"
+initial = '{"on": false, "info": ""}'
+triggers = ["dbus:session:org.freedesktop.systemd1:/org/freedesktop/systemd1/unit/syncthing_2eservice", "hover"]
+
+# bluez: Powered, Connected, Battery1.Percentage all come as PropertiesChanged
+[[source]]
+name = "bluetooth"
+kind = "bluetooth"
+initial = '{"text": "", "info": ""}'
+triggers = ["dbus:system:org.bluez:/", "refresh"]
+
+# links, addresses and routes from rtnetlink; iwd's Station.State over
+# D-Bus; the signal strength when the card opens
+[[source]]
+name = "network"
+kind = "network"
+initial = '{"text": "", "info": ""}'
+triggers = ["netlink", "dbus:system:net.connman.iwd:/net/connman/iwd", "hover"]
+
+# the battery: the kernel's uevents (plug, unplug, and capacity steps when
+# the firmware reports them), and UPower's PropertiesChanged (UPower reads
+# sysfs for everyone, the bar only hears about changes); the estimate in
+# the card is fresh when it opens
+[[source]]
+name = "battery"
+kind = "battery"
+initial = '{"text": "", "info": "", "class": ""}'
+triggers = ["udev:power_supply", "dbus:system:org.freedesktop.UPower:/org/freedesktop/UPower/devices/battery_BAT0", "hover"]
+
+[[source]]
+name = "profile"
+kind = "powerprofile"
+initial = '{"profile": ""}'
+triggers = ["dbus:system:org.freedesktop.UPower.PowerProfiles:/org/freedesktop/UPower/PowerProfiles"]
+
+# the uptime only matters when you look at it
+[[source]]
+name = "power-info"
+kind = "command"
+command = "uptime -p | sed 's/^up /Uptime: /'"
+triggers = ["hover"]
+
+# ---- sources: native ---------------------------------------------------
+
+[[source]]
+name = "clock"
+kind = "clock"
+format = "%Y-%m-%d %H:%M"
+info_format = "%A %d %B %Y%nWeek %V, day %j"
+
+[[source]]
+name = "pomodoro"
+kind = "pomodoro"
+
+[[source]]
+name = "timer"
+kind = "timer"
+
+# ---- modules: left -----------------------------------------------------
+
+[[module]]
+name = "workspaces"
+kind = "list"
+items = "sway.workspaces"
+item_text = "{name}"
+item_class = "{focused|if:focused} {urgent|if:urgent} {visible|if:visible}"
+item_click = "swaymsg workspace '{name}'"
+
+[[module]]
+name = "scratchpad"
+title = "Scratchpad"
+text = "{scratchpad.text}"
+info = "{scratchpad.info}"
+class = "{scratchpad.class}"
+click = "swaymsg scratchpad show"
+middle = "swaymsg floating disable"
+right = "swaymsg move scratchpad"
+hints = [["L 1", "show / cycle"], ["M 2", "take out"], ["R 3", "put in"]]
+
+[[module]]
+name = "mode"
+kind = "label"
+text = "{sway.mode}"
+hide_when = "default"
+
+[[module]]
+name = "launcher"
+title = "Launcher"
+text = "󰕰"
+info = "the bar's picker"
+click = "lintel launch"
+middle = "lintel windows"
+right = "swaymsg '[workspace=__focused__] kill'"
+hints = [["L 1", "applications"], ["M 2", "windows"], ["R 3", "close the workspace"]]
+
+[[module]]
+name = "pomodoro"
+title = "Pomodoro"
+text = "{pomodoro.text}"
+info = "{pomodoro.info}"
+class = "{pomodoro.class}"
+click = "lintel pomodoro toggle"
+middle = "lintel pomodoro skip"
+right = "lintel pomodoro stop"
+hints = [["L 1", "start / pause"], ["M 2", "skip the phase"], ["R 3", "stop the session"]]
+# in the card: a countdown, independent of the session; the label is its
+# key (the same label again restarts it) and its notification's title
+input = { prompt = "Minutes", default = "7", label = "Label", label_default = "Countdown", button = "Start", command = "lintel timer {value}m {label}" }
+
+# the countdowns, one next to the other, each with its seconds and its
+# label; a right click stops that one. They start from the pomodoro card
+[[module]]
+name = "timer"
+kind = "list"
+items = "timer.items"
+item_text = "󰔟 {text} {label}"
+item_right = "lintel timer stop {label}"
+
+# the StatusNotifier icons: left click activates
+# (or opens the menu when the item is only a menu), right click the menu,
+# middle click the secondary action, the wheel scrolls
+[[module]]
+name = "tray"
+kind = "tray"
+icon_size = 16
+spacing = 4
+
+# the title takes up to 60 characters, and is the first to give width
+# back when the bar is short of it
+[[module]]
+name = "title"
+title = "Window"
+text = "| {sway.title}"
+max_chars = 60
+info = "{sway.title}"
+click = "swaymsg floating toggle"
+middle = "swaymsg fullscreen toggle"
+right = "swaymsg kill"
+scroll_up = "swaymsg focus prev"
+scroll_down = "swaymsg focus next"
+hints = [["L 1", "float"], ["M 2", "fullscreen"], ["R 3", "close"], ["⇅ 4/5", "focus previous / next"]]
+
+# ---- modules: right ----------------------------------------------------
+
+[[module]]
+name = "mpris"
+side = "right"
+title = "Player"
+markup = true
+text = "{mpris.text}"
+max_chars = 60
+info = "{mpris.info}"
+class = "{mpris.class}"
+click = "playerctl play-pause"
+middle = "playerctld shift"
+right = "playerctl next"
+scroll_up = "playerctl volume 0.05+"
+scroll_down = "playerctl volume 0.05-"
+hints = [["L 1", "play / pause"], ["M 2", "next player"], ["R 3", "next track"], ["⇅ 4/5", "volume"]]
+
+[[module]]
+name = "recording"
+side = "right"
+title = "Recording"
+text = "{recording}"
+info = "wf-recorder is running"
+class = "recording"
+click = "pkill -INT -x wf-recorder; lintel refresh recording"
+hints = [["L 1", "stop"]]
+
+[[module]]
+name = "volume"
+side = "right"
+title = "Audio output"
+text = "{audio.sink.text}"
+info = "{audio.sink.info}"
+click = "pavucontrol"
+right = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+scroll_up = "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 2%+"
+scroll_down = "wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"
+hints = [["L 1", "mixer"], ["R 3", "mute"], ["⇅ 4/5", "volume"]]
+
+[[module]]
+name = "mic"
+side = "right"
+title = "Audio input"
+text = "{audio.source.text}"
+info = "{audio.source.info}"
+click = "pavucontrol -t 4"
+right = "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
+scroll_up = "wpctl set-volume -l 1 @DEFAULT_AUDIO_SOURCE@ 2%+"
+scroll_down = "wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 2%-"
+hints = [["L 1", "mixer"], ["R 3", "mute"], ["⇅ 4/5", "volume"]]
+
+[[module]]
+name = "display"
+side = "right"
+title = "Display"
+text = "{display.text}"
+info = "{display.info}"
+click = "nwg-displays"
+hints = [["L 1", "settings"]]
+
+[[module]]
+name = "brightness"
+side = "right"
+title = "Brightness"
+text = "{brightness.text}"
+info = "{brightness.info}"
+right = "brightnessctl set 40%"
+scroll_up = "brightnessctl set 5%+"
+scroll_down = "brightnessctl set 5%-"
+hints = [["R 3", "reset 40%"], ["⇅ 4/5", "level"]]
+
+[[module]]
+name = "bluetooth"
+side = "right"
+title = "Bluetooth"
+text = "{bluetooth.text}"
+info = "{bluetooth.info}"
+click = "blueman-manager"
+hints = [["L 1", "manager"]]
+
+[[module]]
+name = "network"
+side = "right"
+title = "Network"
+text = "{network.text}"
+info = "{network.info}"
+click = "alacritty -e impala"
+hints = [["L 1", "impala"]]
+
+[[module]]
+name = "battery"
+side = "right"
+title = "Battery"
+text = "{battery.text}"
+info = "{battery.info}"
+class = "{battery.class}"
+
+# the system's controls in one card: the uptime, the power actions, the
+# CPU's power profile (the one in use is marked), and switches for
+# Tailscale, Syncthing and the night light
+[[module]]
+name = "controls"
+side = "right"
+title = "Control System"
+text = ""
+info = "{power-info}"
+
+[[module.buttons]]
+label = "Power"
+items = [
+  { text = "󰌾 Lock", command = "swaylock" },
+  { text = "󰤄 Suspend", command = "systemctl suspend" },
+  { text = "󰍃 Logout", command = "swaymsg exit" },
+  { text = "󰜉 Reboot", command = "systemctl reboot" },
+  { text = "󰐥 Off", command = "systemctl poweroff" },
+]
+
+[[module.buttons]]
+label = "Power profile"
+state = "{profile.profile}"
+items = [
+  { text = " Saver", value = "power-saver", command = "powerprofilesctl set power-saver" },
+  { text = " Balanced", value = "balanced", command = "powerprofilesctl set balanced" },
+  { text = " Performance", value = "performance", command = "powerprofilesctl set performance" },
+]
+
+[[module.toggles]]
+label = "Tailscale"
+detail = "{tailscale.info}"
+state = "{tailscale.on}"
+on = "tailscale up; lintel refresh tailscale"
+off = "tailscale down; lintel refresh tailscale"
+
+[[module.toggles]]
+label = "Syncthing"
+detail = "{syncthing.info}"
+state = "{syncthing.on}"
+on = "systemctl --user start syncthing.service"
+off = "systemctl --user stop syncthing.service"
+
+[[module.toggles]]
+label = "Night light"
+detail = "{nightlight.info}"
+state = "{nightlight.on}"
+on = "systemctl --user start gammastep.service"
+off = "systemctl --user stop gammastep.service"
+
+# the date and time; the card carries the month's calendar: ‹ and › or a
+# scroll change the month, the month name returns to today, q or Escape
+# closes
+[[module]]
+name = "clock"
+kind = "calendar"
+side = "right"
+title = "Calendar"
+text = "{clock.text}"
+info = "{clock.info}"
+hints = [["‹ ›", "month"], ["L 1", "today"]]

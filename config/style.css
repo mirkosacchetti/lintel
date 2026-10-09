@@ -1,0 +1,219 @@
+/* lintel style, GTK 4 CSS: a dark blue palette, JetBrains Mono Nerd Font.
+   GTK's own theme is undone where it would show: buttons, entries,
+   popovers; everything else is drawn plain. */
+
+* {
+  font-family: "JetBrainsMono Nerd Font Propo";
+  font-size: 14px;
+  color: #d6e2ee;
+  transition: none;
+}
+
+window { background-color: transparent; }
+window.lintel-bar { background-color: #16242d; }
+
+/* GTK's theme out of the way. The layout properties are reset on the
+   bare element only: a pseudo-class rule (button:hover) outranks a class
+   rule (.item), and a padding reset there would shift the text on hover. */
+button {
+  background: none;
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  border-radius: 0;
+}
+button:hover, button:active, button:checked, button:focus {
+  background: none;
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+  outline: none;
+}
+entry {
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  min-height: 0;
+  caret-color: #d6e2ee;
+}
+entry:focus { background: none; border: none; box-shadow: none; outline: none; }
+entry selection { background-color: #4d86b0; color: #16242d; }
+label { padding: 0; margin: 0; }
+
+.line { min-height: 28px; }
+
+/* a plain box takes no padding of its own, the slot does */
+.slot, .item { padding: 0 0.5rem; }
+.list { padding: 0; }
+.tray { padding: 0 0.5rem; }
+
+/* hover line, and the module stays marked while its card is open */
+.module:hover, .module.open, .item:hover, .scratchpad.focused { box-shadow: inset 0 1px #d6e2ee; }
+/* the focused workspace in bold, the urgent one in red */
+.workspaces .item.focused { box-shadow: inset 0 1px #d6e2ee; }
+.workspaces .item.focused label { font-weight: bold; }
+.workspaces .item.urgent label { color: #bf616a; }
+
+.mode { font-style: italic; color: #4d86b0; }
+
+/* red only for states that need attention */
+.recording label, .critical label, .urgent label { color: #bf616a; }
+
+/* the card under the hovered module */
+.card {
+  min-width: 360px;   /* 40 characters of this font, the labels' limit */
+  background-color: #16242d;
+  border: 1px solid #d6e2ee;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-top: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.card-title { font-weight: bold; margin-bottom: 6px; }
+/* the card's switches (the toggles module): the name, a line under it,
+   and a pill on the right, the accent when on */
+.card .toggles { margin-top: 16px; }
+.card .toggle { padding: 4px 0; }
+.card .toggle .detail { color: #8bc9eb; font-size: 12px; }
+.card switch {
+  min-width: 40px;
+  min-height: 22px;
+  padding: 2px;
+  border: none;
+  border-radius: 13px;
+  background-color: #304860;
+  background-image: none;
+  box-shadow: none;
+  outline: none;
+}
+.card switch:checked { background-color: #4d86b0; }
+.card switch slider {
+  min-width: 22px;
+  min-height: 22px;
+  margin: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: #d6e2ee;
+  background-image: none;
+  box-shadow: none;
+}
+/* GTK's I and O marks inside the pill */
+.card switch image { color: transparent; }
+/* the card's rows of buttons (the controls module), over the switches:
+   a caption, then the buttons side by side; the one a choice is on in the accent */
+.card .button-row { margin-top: 16px; }
+.card .button-row button {
+  padding: 5px 6px;
+  border-radius: 6px;
+  background-color: #243d56;
+}
+.card .button-row button:hover { background-color: #304860; }
+.card .button-row button.active { background-color: #4d86b0; }
+.card .button-row button label { font-size: 12px; }
+/* the card's input row: a field and a button */
+.card .input { margin-top: 8px; }
+.card entry {
+  padding: 2px 6px;
+  border: 1px solid #4d86b0;
+  border-radius: 3px;
+  background-color: #0f1a21;
+}
+.card entry:focus { border-color: #8bc9eb; }
+.card .input button {
+  padding: 2px 10px;
+  border-radius: 3px;
+  background-color: #8bc9eb;
+}
+.card .input button label { color: #16242d; }
+/* the mouse actions: small, in blue, the button as a badge, two per row */
+.hints { margin-top: 12px; }
+.hints label { font-size: 11px; color: #8bc9eb; }
+.hint { min-width: 180px; }
+.hints .key {
+  font-size: 9px;
+  min-width: 14px;
+  padding: 2px 6px;
+  margin: 2px 8px 2px 0;
+  color: #16242d;
+  background-color: #8bc9eb;
+  border-radius: 3px;
+}
+
+/* the calendar in the clock's card: the card's colour behind, the grid
+   lines and today a shade lighter, the other months' days dimmed, the
+   weekend in the light blue */
+.calendar { margin-top: 12px; }
+/* the header: the month name between the navigation buttons; the three
+   are buttons of their own, with a hover like the day's highlight */
+.calendar .head { margin-bottom: 8px; }
+.calendar .nav label { font-weight: bold; padding: 2px 8px; }
+.calendar .nav:hover, .calendar .title:hover { background-color: #243d56; }
+.calendar .title { border-radius: 3px; }
+.calendar .title label { font-weight: bold; padding: 2px 0; }
+/* the week row and the cells: grid lines, on cells a touch wider
+   than tall, to fill the card's width */
+.calendar .weekday { font-size: 11px; padding-bottom: 6px; }
+.calendar .weekday.weekend { color: #8bc9eb; }
+.calendar .day {
+  min-width: 44px;
+  min-height: 30px;
+  padding: 5px 0;
+  border: 1px solid #243d56;
+  margin: -1px 0 0 -1px;
+}
+.calendar .day.outside { color: #304860; }
+.calendar .day.today { background-color: #243d56; font-weight: bold; }
+
+/* the tray menus: popovers in the bar's colours */
+popover.tray-menu > contents {
+  background-color: #16242d;
+  border: 1px solid #d6e2ee;
+  border-radius: 6px;
+  padding: 4px 0;
+}
+popover.tray-menu modelbutton { padding: 4px 12px; min-height: 0; }
+popover.tray-menu modelbutton:hover { background-color: #4d86b0; }
+popover.tray-menu modelbutton:disabled label { color: #7f93a3; }
+popover.tray-menu separator { background-color: #4d86b0; min-height: 1px; margin: 4px 0; }
+
+/* the picker: the launcher, the window switcher, `lintel pick` */
+.picker {
+  background-color: #16242d;
+  border: 1px solid #d6e2ee;
+  border-radius: 8px;
+  padding: 8px;
+}
+.picker .head { margin-bottom: 6px; border-bottom: 1px solid #4d86b0; }
+.picker .prompt { font-weight: bold; color: #8bc9eb; padding: 6px 0 6px 8px; }
+.picker entry { font-weight: bold; padding: 6px 8px; }
+.picker .row { padding: 4px 8px; border-radius: 4px; min-height: 24px; }
+.picker .row.selected { background-color: #243d56; }
+/* the hover shows as the selection, since it moves it */
+.picker .row .detail { color: #8bc9eb; font-size: 12px; margin-left: 8px; }
+/* an app's open window, under the app */
+.picker .row.child { margin-left: 32px; }
+.picker .row.child label { font-size: 13px; }
+
+/* the notifications: cards under the bar, the frame says the urgency */
+.notification {
+  background-color: #16242d;
+  border: 1px solid #d6e2ee;
+}
+.notification .inner { padding: 10px 12px; }
+.notification.low { border-color: #304860; }
+.notification.critical { border-color: #bf616a; }
+.notification .summary { font-weight: bold; }
+.notification .body { color: #c0cdd9; }
+.notification progressbar { margin-top: 6px; }
+.notification progressbar trough { background-color: #304860; min-height: 8px; border: none; }
+.notification progressbar progress { background-color: #8bc9eb; min-height: 8px; border: none; }
+.notification .actions { margin-top: 8px; }
+.notification .actions button { padding: 2px 10px; border-radius: 3px; background-color: #304860; }
+.notification .actions button label { color: #d6e2ee; }
