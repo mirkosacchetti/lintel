@@ -13,7 +13,7 @@ use futures_util::StreamExt;
 use serde_json::json;
 use std::path::PathBuf;
 use std::time::Duration;
-use swayipc_async::{Connection, EventType, Output};
+use swayipc_async::{EventType, Output};
 
 const ICON: char = '\u{f0379}';
 
@@ -34,8 +34,11 @@ fn pick_file() -> PathBuf {
 }
 
 async fn follow(src: &Source, hub: &Hub) -> Result<()> {
-    let mut conn = Connection::new().await.context("connecting to sway")?;
-    let mut events = Connection::new().await?.subscribe([EventType::Output, EventType::Tick]).await?;
+    let mut conn = crate::swaysock::connect().await.context("connecting to sway")?;
+    let mut events = crate::swaysock::connect()
+        .await?
+        .subscribe([EventType::Output, EventType::Tick])
+        .await?;
     loop {
         let outputs = conn.get_outputs().await?;
         let pick = std::fs::read_to_string(pick_file()).unwrap_or_default().trim().to_string();

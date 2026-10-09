@@ -279,7 +279,11 @@ fn bar_command(args: &Value) -> Result<String> {
 // ---- sway ---------------------------------------------------------------
 
 fn swaymsg(args: &[&str]) -> Result<Value> {
-    let out = Command::new("swaymsg").arg("-r").args(args).output().context("running swaymsg")?;
+    let mut c = Command::new("swaymsg");
+    if let Some(sock) = crate::swaysock::path() {
+        c.arg("-s").arg(sock);
+    }
+    let out = c.arg("-r").args(args).output().context("running swaymsg")?;
     let v: Value =
         serde_json::from_slice(&out.stdout).with_context(|| format!("swaymsg: {}", String::from_utf8_lossy(&out.stderr).trim()))?;
     Ok(v)

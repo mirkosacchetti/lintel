@@ -143,7 +143,11 @@ impl Session {
 
     /// The day's worked time, the running stretch included.
     fn worked(&self) -> Duration {
-        let base = if self.today.date == local_date() { self.today.worked_secs } else { 0 };
+        let base = if self.today.date == local_date() {
+            self.today.worked_secs
+        } else {
+            0
+        };
         Duration::from_secs(base) + self.working_since.map(|s| s.elapsed()).unwrap_or_default()
     }
 
@@ -289,11 +293,7 @@ fn today_line(s: &Session) -> Option<String> {
 
 fn render(s: &Session, cfg: &PomodoroConfig, per_second: bool) -> serde_json::Value {
     let (text, info, class) = match s.phase {
-        Phase::Stopped => (
-            icon(cfg, "stopped").to_string(),
-            "No session".to_string(),
-            "stopped".to_string(),
-        ),
+        Phase::Stopped => (icon(cfg, "stopped").to_string(), "No session".to_string(), "stopped".to_string()),
         phase => {
             let left = fmt_remaining(s.remaining(), per_second);
             let (ic, class) = if s.paused.is_some() {

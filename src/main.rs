@@ -8,6 +8,7 @@ mod locale;
 mod mcp;
 mod runner;
 mod sources;
+mod swaysock;
 mod template;
 mod ui;
 

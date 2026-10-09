@@ -50,7 +50,7 @@ fn backlight() -> Option<i64> {
 
 pub async fn take(src: Source, hub: Hub) -> Result<Value> {
     // the screen: the picked one if still there, else the focused one
-    let mut conn = swayipc_async::Connection::new().await?;
+    let mut conn = crate::swaysock::connect().await?;
     let outputs = conn.get_outputs().await?;
     let mut active: Vec<_> = outputs.iter().filter(|o| o.active).collect();
     active.sort_by_key(|o| !o.focused);

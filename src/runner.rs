@@ -8,8 +8,8 @@ use std::process::Stdio;
 /// Run CMD through the compositor (`swaymsg exec`): the program gets the
 /// session's own environment, Wayland and all, and lives under sway, not
 /// under the bar's service, so a restart of the bar does not take it
-/// down. `$S` is the scripts directory. Without sway, `sh -c` from the
-/// bar in its own process group, reaped by a thread.
+/// down. `$S` is the scripts directory. Without sway, `sh -c` in a
+/// systemd scope of its own, reaped by a thread.
 pub fn detached(cmd: &str, scripts: &str) {
     if cmd.trim().is_empty() {
         return;
@@ -27,8 +27,10 @@ pub fn detached(cmd: &str, scripts: &str) {
         scripts.replace('\'', "'\\''"),
         path.replace('\'', "'\\''"),
     );
-    if std::env::var_os("SWAYSOCK").is_some() {
+    if let Some(sock) = crate::swaysock::path() {
         let ok = std::process::Command::new("swaymsg")
+            .arg("-s")
+            .arg(sock)
             .args(["exec", "--", &script])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -39,8 +41,15 @@ pub fn detached(cmd: &str, scripts: &str) {
             return;
         }
     }
-    let mut c = std::process::Command::new("sh");
-    c.arg("-c").arg(&script).stdin(Stdio::null()).stdout(Stdio::null()).process_group(0);
+    // without sway: a scope of its own under the user manager, so the
+    // program is not in the bar's cgroup, which a restart of the bar's
+    // service would kill whole
+    let mut c = std::process::Command::new("systemd-run");
+    c.args(["--user", "--scope", "--quiet", "--collect", "sh", "-c"])
+        .arg(&script)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .process_group(0);
     match c.spawn() {
         Ok(mut child) => {
             std::thread::spawn(move || {
@@ -57,6 +66,7 @@ pub async fn capture(cmd: &str, scripts: &str) -> Result<String> {
         .arg("-c")
         .arg(cmd)
         .env("S", scripts)
+        .envs(crate::swaysock::path().map(|p| ("SWAYSOCK", p)))
         .stdin(Stdio::null())
         .output()
         .await

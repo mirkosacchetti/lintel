@@ -226,10 +226,13 @@ pub struct Window {
 
 pub async fn windows() -> Result<Vec<Window>> {
     use swayipc_async::{Node, NodeType, ScratchpadState};
-    let mut conn = swayipc_async::Connection::new().await?;
+    let mut conn = crate::swaysock::connect().await?;
     let tree = conn.get_tree().await?;
     let mut out = Vec::new();
-    fn walk(n: &Node, ws: &str, out: &mut Vec<Window>) {
+    // `scratch`: the node or an ancestor is in the scratchpad (a window
+    // inside a tabbed container sent there carries no state of its own)
+    fn walk(n: &Node, ws: &str, scratch: bool, out: &mut Vec<Window>) {
+        let scratch = scratch || matches!(n.scratchpad_state, Some(ScratchpadState::Fresh) | Some(ScratchpadState::Changed));
         let ws = if n.node_type == NodeType::Workspace {
             let name = n.name.clone().unwrap_or_default();
             if name == "__i3_scratch" {
@@ -250,14 +253,14 @@ pub async fn windows() -> Result<Vec<Window>> {
                     .unwrap_or_else(|| "?".into()),
                 workspace: ws.clone(),
                 title: n.name.clone().unwrap_or_default(),
-                scratchpad: matches!(n.scratchpad_state, Some(ScratchpadState::Fresh) | Some(ScratchpadState::Changed)),
+                scratchpad: scratch,
             });
         }
         for c in n.nodes.iter().chain(n.floating_nodes.iter()) {
-            walk(c, &ws, out);
+            walk(c, &ws, scratch, out);
         }
     }
-    walk(&tree, "", &mut out);
+    walk(&tree, "", false, &mut out);
     Ok(out)
 }
 
@@ -380,7 +383,7 @@ pub async fn focus(w: &Window, hub: &Hub) -> Result<()> {
         runner::detached(&show.replace("{id}", &w.id.to_string()), hub.scripts());
         return Ok(());
     }
-    let mut conn = swayipc_async::Connection::new().await?;
+    let mut conn = crate::swaysock::connect().await?;
     conn.run_command(format!("[con_id={}] focus", w.id)).await?;
     Ok(())
 }

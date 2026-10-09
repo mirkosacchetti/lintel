@@ -244,7 +244,9 @@ spacing = 4
 [[module]]
 name = "title"
 title = "Window"
-text = "|  {sway.title}"
+# the scratchpad's icon instead of the window's while a scratchpad window
+# has the focus
+text = "| {scratchpad.class|if:󰄷|or:} {sway.title}"
 hide_when = "|  "
 max_chars = 60
 info = "{sway.title}"

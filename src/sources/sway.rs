@@ -7,8 +7,9 @@
 //!
 //! Emits `NAME` = {workspaces: [{name, num, focused, visible, urgent,
 //! output}], mode, title} and `scratchpad` = {text, info, class, count}:
-//! the scratchpad icon with the count beside it, the windows one per line, and
-//! "focused" when one of them has the focus.
+//! the scratchpad icon with the count beside it, the windows one per
+//! line, and "focused" when one of them has the focus (a template can
+//! then show the title with the scratchpad's icon).
 
 use super::Hub;
 use crate::config::Source;
@@ -37,6 +38,10 @@ struct State {
     title: String,
     /// The scratchpad windows: "app: title" each.
     scratch: Vec<String>,
+    /// Their con ids: a window inside a container sent to the scratchpad
+    /// (a tabbed one, say) is a scratchpad window too, though only the
+    /// container carries the scratchpad state.
+    scratch_ids: Vec<i64>,
     /// The focused window is one of them.
     scratch_focused: bool,
 }
@@ -51,8 +56,8 @@ pub async fn run(src: Source, hub: Hub) {
 }
 
 async fn follow(src: &Source, hub: &Hub) -> Result<()> {
-    let mut conn = Connection::new().await.context("connecting to sway")?;
-    let mut events = Connection::new()
+    let mut conn = crate::swaysock::connect().await.context("connecting to sway")?;
+    let mut events = crate::swaysock::connect()
         .await?
         .subscribe([EventType::Workspace, EventType::Window, EventType::Mode])
         .await
@@ -97,13 +102,13 @@ async fn apply(conn: &mut Connection, s: &mut State, ev: Event) -> Result<()> {
             match w.change {
                 WindowChange::Focus => {
                     s.title = c.name.clone().unwrap_or_default();
-                    s.scratch_focused = in_scratchpad(c);
+                    s.scratch_focused = in_scratchpad(c) || s.scratch_ids.contains(&c.id);
                 }
                 WindowChange::Title => {
                     if c.focused {
                         s.title = c.name.clone().unwrap_or_default();
                     }
-                    if in_scratchpad(c) {
+                    if in_scratchpad(c) || s.scratch_ids.contains(&c.id) {
                         read_tree(conn, s).await?;
                     }
                 }
@@ -112,7 +117,7 @@ async fn apply(conn: &mut Connection, s: &mut State, ev: Event) -> Result<()> {
                         s.title.clear();
                         s.scratch_focused = false;
                     }
-                    if in_scratchpad(c) {
+                    if in_scratchpad(c) || s.scratch_ids.contains(&c.id) {
                         read_tree(conn, s).await?;
                     }
                 }
@@ -154,12 +159,15 @@ async fn read_tree(conn: &mut Connection, s: &mut State) -> Result<()> {
     let tree = conn.get_tree().await?;
     let mut title = None;
     let mut scratch = Vec::new();
+    let mut scratch_ids = Vec::new();
     let mut focused = false;
-    walk(&tree, &mut |n| {
+    walk(&tree, false, &mut |n, inside| {
         if n.focused && n.node_type != NodeType::Workspace && title.is_none() {
             title = Some(n.name.clone().unwrap_or_default());
         }
-        if in_scratchpad(n) {
+        // a window, in the scratchpad itself or under a container that is
+        if inside && n.pid.is_some() {
+            scratch_ids.push(n.id);
             let app = n
                 .app_id
                 .clone()
@@ -171,14 +179,18 @@ async fn read_tree(conn: &mut Connection, s: &mut State) -> Result<()> {
     });
     s.title = title.unwrap_or_default();
     s.scratch = scratch;
+    s.scratch_ids = scratch_ids;
     s.scratch_focused = focused;
     Ok(())
 }
 
-fn walk(n: &Node, f: &mut dyn FnMut(&Node)) {
-    f(n);
+/// Every node, and whether it or one of its ancestors is in the
+/// scratchpad.
+fn walk(n: &Node, inside: bool, f: &mut dyn FnMut(&Node, bool)) {
+    let inside = inside || in_scratchpad(n);
+    f(n, inside);
     for c in n.nodes.iter().chain(n.floating_nodes.iter()) {
-        walk(c, f);
+        walk(c, inside, f);
     }
 }
 

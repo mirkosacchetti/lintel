@@ -212,7 +212,7 @@ async fn sway(events: String, tx: Tick) -> Result<()> {
     if types.is_empty() {
         bail!("sway:EVENT[,EVENT]");
     }
-    let conn = swayipc_async::Connection::new().await?;
+    let conn = crate::swaysock::connect().await?;
     let mut stream = conn.subscribe(&types).await?;
     while let Some(ev) = stream.next().await {
         ev?;
