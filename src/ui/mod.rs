@@ -40,23 +40,28 @@ pub fn run(cfg: Arc<Config>, updates: async_channel::Receiver<Message>, reqs: Un
     let display = gdk::Display::default().context("no display")?;
     let outputs: Rc<RefCell<Vec<bar::OutputUi>>> = Rc::default();
     let next_id = Rc::new(std::cell::Cell::new(1u32));
+    // zen: the bars hidden; a bar built meanwhile (a hotplug) starts so
+    let zen = Rc::new(std::cell::Cell::new(false));
 
     let open = {
-        let (cfg, store, tray, outputs, reqs, next_id) = (
+        let (cfg, store, tray, outputs, reqs, next_id, zen) = (
             cfg.clone(),
             store.clone(),
             tray.clone(),
             outputs.clone(),
             reqs.clone(),
             next_id.clone(),
+            zen.clone(),
         );
         Rc::new(move |monitor: &gdk::Monitor| {
             let id = next_id.get();
             next_id.set(id + 1);
             eprintln!("bar on {} ({id})", monitor.connector().map(|c| c.to_string()).unwrap_or_default());
-            outputs
-                .borrow_mut()
-                .push(bar::build(&cfg, &store, &tray, monitor, id, reqs.clone()));
+            let ui = bar::build(&cfg, &store, &tray, monitor, id, reqs.clone());
+            if zen.get() {
+                ui.set_zen(true);
+            }
+            outputs.borrow_mut().push(ui);
         })
     };
     let monitors = display.monitors();
@@ -105,7 +110,18 @@ pub fn run(cfg: Arc<Config>, updates: async_channel::Receiver<Message>, reqs: Un
     glib::MainContext::default().spawn_local(async move {
         while let Ok(msg) = updates.recv().await {
             match msg {
-                Message::Var(u) => store.set(&u.name, u.value),
+                Message::Var(u) => {
+                    if u.name == "zen" {
+                        let on = u.value.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
+                        if on != zen.get() {
+                            zen.set(on);
+                            for o in outputs.borrow().iter() {
+                                o.set_zen(on);
+                            }
+                        }
+                    }
+                    store.set(&u.name, u.value)
+                }
                 Message::Tray(u) => tray.handle(*u),
                 Message::Pick(r) => picker.show(*r),
                 Message::CancelPick => picker.cancel(),

@@ -109,7 +109,8 @@ fn tools() -> Vec<Value> {
             "bar_command",
             "Send a request to the running bar, as `lintel ...` does: `refresh NAME`, `get NAME`, `update NAME VALUE`, \
              `pomodoro start|stop|pause|resume|toggle|skip|status`, `timer 7m LABEL`, `timer stop [LABEL]`, \
-             `timer status`, `notifications close|close-all|pop|clear|toggle|status`, `cancel`. The interactive \
+             `timer status`, `notifications close|close-all|pop|clear|toggle|status`, `zen on|off|toggle|status`, \
+             `cancel`. The interactive \
              ones (pick, launch, windows, notifications history) wait for the user and are refused.",
             json!({"command": {"type": "string", "description": "The request line, e.g. \"refresh brightness\"."}}),
         ),

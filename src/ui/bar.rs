@@ -30,6 +30,8 @@ pub struct OutputUi {
     pub id: u32,
     bar: gtk::Window,
     popup: gtk::Window,
+    /// Closes the card, with the state that says it is open.
+    close_card: Rc<dyn Fn()>,
 }
 
 impl OutputUi {
@@ -37,6 +39,16 @@ impl OutputUi {
         store.drop_owner(self.id);
         self.popup.close();
         self.bar.close();
+    }
+
+    /// Zen: the bar (and its card) off the screen, and sway gives the
+    /// windows the room; or back. The layer surface goes with the window
+    /// and comes back with it, anchors and all.
+    pub fn set_zen(&self, on: bool) {
+        if on {
+            (self.close_card)();
+        }
+        self.bar.set_visible(!on);
     }
 }
 
@@ -582,11 +594,19 @@ pub fn build(
 
     bar.present();
     card.hide();
+    let close_card: Rc<dyn Fn()> = {
+        let (h, c) = (hover.clone(), card.clone());
+        Rc::new(move || {
+            h.seq.set(h.seq.get() + 1);
+            close_card(&h, &c);
+        })
+    };
     OutputUi {
         monitor: monitor.clone(),
         id,
         bar,
         popup,
+        close_card,
     }
 }
 

@@ -280,7 +280,11 @@ struct Daemon {
     visible: Vec<Note>,
     queue: VecDeque<Note>,
     history: VecDeque<Note>,
+    /// Your pause: everything to the history.
     paused: bool,
+    /// Zen (sources/zen.rs): everything to the history but the bar's
+    /// own, which are the pomodoro's word that the phase is over.
+    zen: bool,
     deadlines: HashMap<u32, Instant>,
     /// The bar's own notifications: what their buttons call.
     handlers: HashMap<u32, ActionHandler>,
@@ -316,6 +320,7 @@ pub async fn run(hub: Hub, mut events: mpsc::UnboundedReceiver<NotifyEvent>, mut
         queue: VecDeque::new(),
         history: VecDeque::new(),
         paused: false,
+        zen: false,
         deadlines: HashMap::new(),
         handlers: HashMap::new(),
         entry_icons,
@@ -416,7 +421,7 @@ impl Daemon {
                 self.hub.notify(NotifyUpdate::Close(prev));
             }
         }
-        if self.paused {
+        if self.paused || (self.zen && n.app != "lintel") {
             self.remember(&n);
             self.publish();
             return;
@@ -602,6 +607,12 @@ impl Daemon {
                 }
             }
             "status" => self.status().to_string(),
+            // from the zen source, not a user command
+            "zen on" | "zen off" => {
+                self.zen = cmd == "zen on";
+                self.publish();
+                "ok".into()
+            }
             // as JSON, for `lintel mcp`: on screen and in the history,
             // newest first, without opening anything
             "list" => {
@@ -616,6 +627,7 @@ impl Daemon {
                     "visible": self.visible.iter().rev().map(note).collect::<Vec<_>>(),
                     "history": self.history.iter().map(note).collect::<Vec<_>>(),
                     "paused": self.paused,
+                    "zen": self.zen,
                 })
                 .to_string()
             }
@@ -626,14 +638,16 @@ impl Daemon {
     /// Back from the history, with its id, for the urgency's time.
     async fn show_again(&mut self, mut n: Note) {
         n.timeout = Some(Duration::ZERO);
-        let paused = self.paused;
+        let (paused, zen) = (self.paused, self.zen);
         self.paused = false;
+        self.zen = false;
         self.show(n).await;
         self.paused = paused;
+        self.zen = zen;
     }
 
     fn status(&self) -> serde_json::Value {
-        let (icon, class) = if self.paused {
+        let (icon, class) = if self.paused || self.zen {
             ('\u{f009b}', "paused")
         } else if !self.history.is_empty() {
             ('\u{f009a}', "history")
@@ -649,10 +663,12 @@ impl Daemon {
         }
         if self.paused {
             info = format!("Silenced\n{info}");
+        } else if self.zen {
+            info = format!("Zen\n{info}");
         }
         json!({
             "text": icon.to_string(), "info": info, "class": class,
-            "count": self.history.len(), "visible": self.visible.len(), "paused": self.paused,
+            "count": self.history.len(), "visible": self.visible.len(), "paused": self.paused, "zen": self.zen,
         })
     }
 

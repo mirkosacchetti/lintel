@@ -13,6 +13,7 @@
 //! skipped or stopped halfway counted for what it ran.
 
 use super::notify::{self, Urgency};
+use super::zen::ZenCommand;
 use super::Hub;
 use crate::config::{PomodoroConfig, Source};
 use crate::runner;
@@ -402,12 +403,28 @@ fn advance(s: &mut Session, cfg: &PomodoroConfig, scripts: &str, tx: &mpsc::Unbo
     runner::detached(&cfg.on_phase_end, scripts);
 }
 
-pub async fn run_pomodoro(src: Source, hub: Hub, mut rx: mpsc::UnboundedReceiver<Command>, tx: mpsc::UnboundedSender<Command>) {
+pub async fn run_pomodoro(
+    src: Source,
+    hub: Hub,
+    mut rx: mpsc::UnboundedReceiver<Command>,
+    tx: mpsc::UnboundedSender<Command>,
+    zen: mpsc::UnboundedSender<ZenCommand>,
+) {
     let cfg = hub.cfg.pomodoro.clone();
     let per_second = cfg.display == "seconds";
     let mut s = load();
+    // zen follows the work phase, when the config says so: told on every
+    // turn of the loop, a change or not (the receiver minds the edges)
+    let mut zen_work: Option<bool> = None;
     loop {
         hub.emit(&src.name, render(&s, &cfg, per_second));
+        if cfg.zen {
+            let working = s.phase == Phase::Work && s.running();
+            if zen_work != Some(working) {
+                zen_work = Some(working);
+                let _ = zen.send(ZenCommand::Work(working));
+            }
+        }
         let wake = s.end.filter(|_| s.running()).map(|end| next_wake(end, per_second));
         tokio::select! {
             cmd = rx.recv() => {

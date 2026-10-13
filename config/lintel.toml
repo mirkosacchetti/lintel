@@ -30,6 +30,7 @@ pomodori_until_long = 4
 pomodori_per_session = 10
 display = "minutes"                   # "seconds" shows mm:ss and wakes every second
 on_phase_end = "pw-play /usr/share/sounds/freedesktop/stereo/complete.oga"
+zen = true                            # work phase: the bar away, the notifications held
 
 # ---- sources: followed on their own events -----------------------------
 
@@ -406,6 +407,13 @@ detail = "{nightlight.info}"
 state = "{nightlight.on}"
 on = "systemctl --user start gammastep.service"
 off = "systemctl --user stop gammastep.service"
+
+[[module.toggles]]
+label = "Zen"
+detail = "{zen.info}"
+state = "{zen.active}"
+on = "lintel zen on"
+off = "lintel zen off"
 
 # the date and time; the card carries the month's calendar: ‹ and › or a
 # scroll change the month, the month name returns to today, q or Escape

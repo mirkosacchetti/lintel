@@ -22,6 +22,7 @@ pub mod snapshot;
 pub mod sway;
 pub mod tray;
 pub mod triggers;
+pub mod zen;
 
 use crate::config::{Config, Source};
 use crate::ipc::Request;
@@ -169,6 +170,10 @@ pub async fn run(cfg: Arc<Config>, out: async_channel::Sender<Message>, mut reqs
     } else {
         (None, None)
     };
+    // zen: the bar away and the notifications held; the pomodoro has a
+    // hand on it, so it starts first
+    let (zen_tx, zen_rx) = mpsc::unbounded_channel();
+    tokio::spawn(zen::run(hub.clone(), zen_rx, notify_commands.clone()));
     // one sound-server connection, when a source needs it
     let pulse = if cfg.sources.iter().any(|s| matches!(s.kind.as_str(), "audio" | "mpris")) {
         Some(pulse::Pulse::start())
@@ -231,7 +236,7 @@ pub async fn run(cfg: Arc<Config>, out: async_channel::Sender<Message>, mut reqs
             "pomodoro" => {
                 let (tx, rx) = mpsc::unbounded_channel();
                 pomodoro_tx = Some(tx.clone());
-                tokio::spawn(pomodoro::run_pomodoro(src, hub, rx, tx));
+                tokio::spawn(pomodoro::run_pomodoro(src, hub, rx, tx, zen_tx.clone()));
             }
             "timer" => {
                 let (tx, rx) = mpsc::unbounded_channel();
@@ -287,6 +292,9 @@ pub async fn run(cfg: Arc<Config>, out: async_channel::Sender<Message>, mut reqs
                     let _ = reply.send("error: no timer source in the config".into());
                 }
             },
+            Request::Zen(cmd, reply) => {
+                let _ = zen_tx.send(zen::ZenCommand::Line(cmd, reply));
+            }
             Request::Tray(cmd) => {
                 if let Some(tx) = &tray_tx {
                     let _ = tx.send(cmd);

@@ -105,6 +105,10 @@ pub struct PomodoroConfig {
     /// Run when a phase ends (a bell, say). Runs through `sh -c`.
     #[serde(default)]
     pub on_phase_end: String,
+    /// Zen while a work phase runs: the bar away, the notifications held
+    /// (sources/zen.rs).
+    #[serde(default)]
+    pub zen: bool,
     /// Icons per phase.
     #[serde(default = "default_icons")]
     pub icons: BTreeMap<String, String>,
@@ -154,6 +158,7 @@ impl Default for PomodoroConfig {
             pomodori_per_session: d10(),
             display: default_display(),
             on_phase_end: String::new(),
+            zen: false,
             icons: default_icons(),
         }
     }

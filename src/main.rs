@@ -33,6 +33,7 @@ lintel — an event-driven bar, with a pomodoro
   lintel windows [TEXT]         the window switcher (Ctrl+Tab: the launcher)
   lintel cancel                 close the picker
   lintel notifications CMD      close | close-all | action | pop | history | clear | toggle | status | list
+  lintel zen CMD                on | off | toggle | status: the bar away, the notifications held
   lintel mcp                    an MCP server on stdin/stdout: the bar, sway, screenshots, logs
   lintel quit
 ";
@@ -57,7 +58,8 @@ fn main() -> Result<()> {
         }
         Some("mcp") => mcp::serve(),
         Some(
-            "refresh" | "update" | "get" | "state" | "pomodoro" | "timer" | "launch" | "windows" | "cancel" | "notifications" | "quit",
+            "refresh" | "update" | "get" | "state" | "pomodoro" | "timer" | "launch" | "windows" | "cancel" | "notifications" | "zen"
+            | "quit",
         ) => {
             let reply = ipc::send(&args.join(" "))?;
             if !reply.is_empty() && reply != "ok" {

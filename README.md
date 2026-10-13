@@ -186,6 +186,20 @@ lintel notifications close | close-all | action | pop | history | clear | toggle
 `history` opens the picker on the history and shows the chosen one
 again; `toggle` is the pause; `list` prints everything as JSON.
 
+### Zen
+
+`lintel zen on | off | toggle | status` takes the bars off the screen
+(sway gives the windows the room) and holds the notifications in the
+history, except the bar's own: the pomodoro's and the countdowns' get
+through, they are the point. With `[pomodoro] zen = true` the pomodoro
+has a hand on the same switch: zen while a work phase runs, the bar back
+for the breaks, the pauses and the end of the session. Yours outlasts
+it: switched on by hand, zen stays through the breaks; switched off by
+hand while the pomodoro holds it, it stays off until work runs again.
+The `zen` variable (`active`, `manual`, `work`, `info`) feeds a switch
+in a card, as in the example; a key (`bindsym $mod+z exec lintel zen
+toggle`) is the way back when the bar is gone.
+
 ### The pomodoro and the countdowns
 
 Work, short break, a long break every few pomodori, a cheer at the end
@@ -213,6 +227,7 @@ lintel launch | windows        the launcher, the window switcher
 lintel pick NAME [PROMPT]      a dmenu; --index prints the number
 lintel cancel                  close the picker
 lintel notifications CMD       see above
+lintel zen on|off|toggle|status
 lintel mcp                     the MCP server, on stdin and stdout
 lintel quit
 ```
@@ -261,8 +276,8 @@ top-right), `offset`, `width`, `gap`, `icon_size`, `max_visible`,
 
 `[pomodoro]`: `work_minutes`, `short_break_minutes`,
 `long_break_minutes`, `pomodori_until_long`, `pomodori_per_session`,
-`display` (`minutes`, or `seconds` for mm:ss), `on_phase_end`, `icons`
-(work, short_break, long_break, paused, stopped, countdown).
+`display` (`minutes`, or `seconds` for mm:ss), `on_phase_end`, `zen`,
+`icons` (work, short_break, long_break, paused, stopped, countdown).
 
 `[[source]]`: `name`, `kind`, `command`, `initial` (the value before the
 first read), `triggers`, and for the clock `format` and `info_format`.
@@ -322,6 +337,7 @@ src/sources/mpris.rs     the media player
 src/sources/battery.rs, network.rs, bluetooth.rs, brightness.rs,
   powerprofile.rs, nightlight.rs     the native readers
 src/sources/pomodoro.rs  the pomodoro and the countdowns
+src/sources/zen.rs       zen: the bar away, the notifications held
 src/sources/notify.rs    the bar's own notifications
 src/sources/notifyd.rs   the notification daemon
 src/sources/tray.rs      the StatusNotifier watcher and host

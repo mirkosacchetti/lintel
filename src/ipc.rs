@@ -15,6 +15,7 @@
 //!   windows [TEXT]        the window switcher
 //!   cancel                close the picker
 //!   notifications CMD     close | close-all | action | pop | history | clear | toggle | status | list
+//!   zen CMD               on | off | toggle | status: the bar away, the notifications held
 //!   quit
 
 use anyhow::{Context, Result};
@@ -54,6 +55,8 @@ pub enum Request {
     Notify(crate::sources::notifyd::NotifyEvent),
     /// `lintel notifications CMD`.
     Notifications(String, oneshot::Sender<String>),
+    /// `lintel zen CMD`.
+    Zen(String, oneshot::Sender<String>),
     Quit,
 }
 
@@ -177,6 +180,7 @@ async fn dispatch(line: &str, tx: &mpsc::UnboundedSender<Request>) -> String {
         "windows" => Request::Windows(format!("{a} {b}").trim().to_string(), reply_tx),
         "cancel" => Request::Cancel,
         "notifications" => Request::Notifications(format!("{a} {b}").trim().to_string(), reply_tx),
+        "zen" => Request::Zen(a, reply_tx),
         "quit" => Request::Quit,
         _ => return format!("error: unknown request {line:?}"),
     };
@@ -189,6 +193,7 @@ async fn dispatch(line: &str, tx: &mpsc::UnboundedSender<Request>) -> String {
             | Request::Launch(..)
             | Request::Windows(..)
             | Request::Notifications(..)
+            | Request::Zen(..)
     );
     if tx.send(req).is_err() {
         return "error: bar is shutting down".into();
