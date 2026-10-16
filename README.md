@@ -21,7 +21,8 @@ An event-driven bar for sway. One process, written in Rust on GTK 4 and
 gtk4-layer-shell, that is:
 
 - the **bar**, one per output, with a card that opens under each module
-  on hover: its information, its switches and buttons, its mouse actions;
+  on a click: its information, its switches and buttons, its mouse
+  actions;
 - the **tray**, a StatusNotifier host with the items' menus;
 - the **launcher** and **window switcher**, and a dmenu for scripts;
 - the **notification daemon**, drawing its own cards under the bar;
@@ -103,14 +104,15 @@ How often a battery reports its capacity is up to the firmware.
 ### Modules and cards
 
 A **module** shows variables through templates (`{battery.text}`,
-`{sway.title|trunc:60}`) and runs commands on the mouse: left, middle,
-right, wheel up and down. A command goes through `swaymsg exec`, so the
+`{sway.title|trunc:60}`) and runs commands on the mouse: middle, right,
+wheel up and down. A command goes through `swaymsg exec`, so the
 program lives under sway, with the session's environment, and outlives
 a restart of the bar; `$S` (the `scripts` directory) and the bar's
 `PATH` go with it.
 
-Resting the pointer on a module opens its **card** under it: the title,
-the information, and what the module declares:
+A left click on a module opens its **card** under it (a click on
+another module moves the card there, the pointer leaving closes it):
+the title, the information, and what the module declares:
 
 - `toggles`: switches, each with a name, a line under it and the
   commands for on and off. The state is a template, and the switch
@@ -262,8 +264,8 @@ answer.
 `config/lintel.toml` is a complete, commented example.
 
 `[bar]`: `height`, `card_width`, `scripts` (exported as `$S`),
-`hover_delay_ms` (rest this long before a card opens),
-`leave_delay_ms`, `coalesce_ms`.
+`leave_delay_ms` (a card stays this long after the pointer leaves),
+`coalesce_ms`.
 
 `[picker]`: `width`, `rows`, `icon_size`, `terminal` (prefixed to the
 entries that want one), `scratchpad` (a command that brings a scratchpad
@@ -286,7 +288,8 @@ first read), `triggers`, and for the clock `format` and `info_format`.
 without a card, `list`, `tray`, `calendar`), `title`, `text`, `info`,
 `class` (templates), `markup` (pango), `max_chars` (the text's width at
 most; when the bar is short of room this label shrinks first),
-`hide_when`, `click`, `middle`, `right`, `scroll_up`, `scroll_down`,
+`hide_when`, `middle`, `right`, `scroll_up`, `scroll_down` (`click` too,
+for a `label`: a module with a card opens it on the left button),
 `hints` (badge and text pairs), `input` (`prompt`, `default`, `label`,
 `label_default`, `button`, `command` with `{value}` and `{label}`),
 `[[module.toggles]]` (`label`, `detail`, `state`, `on`, `off`; the state

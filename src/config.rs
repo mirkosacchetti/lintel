@@ -40,10 +40,6 @@ pub struct Bar {
     /// Exported to the commands as `$S`, so the config can say `$S/foo.sh`.
     #[serde(default)]
     pub scripts: String,
-    /// Milliseconds the pointer must rest on a module before its card
-    /// opens: a flick over the bar does not pop cards by.
-    #[serde(default = "default_hover_delay")]
-    pub hover_delay_ms: u64,
     /// Milliseconds a module stays open after the pointer leaves it: moving
     /// to the next module is a leave followed by an enter.
     #[serde(default = "default_leave_delay")]
@@ -60,9 +56,6 @@ fn default_height() -> i32 {
 fn default_card_width() -> i32 {
     360
 }
-fn default_hover_delay() -> u64 {
-    120
-}
 fn default_leave_delay() -> u64 {
     150
 }
@@ -76,7 +69,6 @@ impl Default for Bar {
             height: default_height(),
             card_width: default_card_width(),
             scripts: String::new(),
-            hover_delay_ms: default_hover_delay(),
             leave_delay_ms: default_leave_delay(),
             coalesce_ms: default_coalesce(),
         }
@@ -377,7 +369,9 @@ pub struct Module {
     /// Hidden when the text equals this (the sway mode is "default").
     #[serde(default)]
     pub hide_when: Option<String>,
-    /// The mouse: commands through `sh -c`, detached from the bar.
+    /// The mouse: commands run detached from the bar. The left button
+    /// opens the card of a `module` or `calendar`, so `click` is for the
+    /// kinds without one (`label`); a card's own actions are its buttons.
     #[serde(default)]
     pub click: String,
     #[serde(default)]
@@ -521,6 +515,12 @@ impl Config {
             }
             if !matches!(m.side.as_str(), "left" | "right") {
                 anyhow::bail!("module {}: side must be left or right", m.name);
+            }
+            if matches!(m.kind.as_str(), "module" | "calendar") && !m.click.is_empty() {
+                anyhow::bail!(
+                    "module {}: the left button opens the card; put the command on `right` or in a [[module.buttons]] row",
+                    m.name
+                );
             }
         }
         for s in &cfg.sources {

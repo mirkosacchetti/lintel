@@ -1,9 +1,10 @@
 //! One output's bar and its popup. The bar is a layer-shell window at
 //! the top with the modules on the left and the right; the popup is a
 //! second, transparent, full-width window right under it, mapped while a
-//! card shows: hovering a module moves the card to sit under that module,
-//! with the module's title, its information, its switches and buttons,
-//! its input row and its mouse actions, and moving to the next module only moves the card. The
+//! card shows: a left click on a module opens its card under it, with the
+//! module's title, its information, its switches and buttons, its input
+//! row and its mouse actions; a click on another module moves the card
+//! there, and the pointer leaving closes it. The
 //! popup's input region is the card alone, so the windows below keep
 //! their clicks.
 
@@ -60,7 +61,9 @@ impl OutputUi {
 /// as it opens, like the picker: the value is selected, so a digit
 /// replaces it and Enter runs it as it is; closing the card (Enter,
 /// Escape, the pointer leaving) gives the keyboard back to the window
-/// that had it. Any other card takes it on demand, when clicked.
+/// that had it. The calendar takes it on demand, when clicked; any
+/// other card never does, so sway keeps a focused window for the
+/// buttons' commands (`swaymsg kill`, `[workspace=__focused__]`).
 struct Card {
     popup: gtk::Window,
     fixed: gtk::Fixed,
@@ -194,12 +197,18 @@ impl Card {
         if with_calendar {
             self.calendar.open();
         }
-        // the keyboard goes with an input: sway hands it back to the
-        // previous window when the mode drops or the popup unmaps
+        // the keyboard goes with an input, and the calendar takes it when
+        // clicked; sway hands it back to the previous window when the
+        // mode drops or the popup unmaps. Any other card leaves it alone:
+        // a layer surface holding the keyboard means no focused container
+        // for sway, and a button's `swaymsg kill` or `[workspace=
+        // __focused__]` would find nothing
         self.popup.set_keyboard_mode(if module.input.is_some() {
             KeyboardMode::Exclusive
-        } else {
+        } else if with_calendar {
             KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::None
         });
         match &module.input {
             Some(input) => {
@@ -488,8 +497,9 @@ pub fn build(
     popup.set_margin(Edge::Top, cfg.bar.height);
     // -1: placed from the screen's edge, not below the bar's exclusive zone
     popup.set_exclusive_zone(-1);
-    // the keyboard on demand; a card with an input takes it (Card::show)
-    popup.set_keyboard_mode(KeyboardMode::OnDemand);
+    // the keyboard is Card::show's business: an input takes it, the
+    // calendar on demand, any other card not at all
+    popup.set_keyboard_mode(KeyboardMode::None);
     let card = Card::new(popup.clone(), cfg.bar.card_width, &cfg.bar.scripts);
 
     // a plain box, the left side expanding: when the two sides together
@@ -767,13 +777,59 @@ fn build_module(
     store.subscribe(vars.clone(), owner, render.clone());
     render(store);
 
-    // the mouse
+    // the card, for the kinds that have one: a left click opens it under
+    // the module (or closes it, when it is this module's), and the wheel
+    // opens it too, as feedback on what it changes; it closes a moment
+    // after the pointer leaves the module and the card, unless something
+    // else was entered meanwhile
+    let with_card = matches!(m.kind.as_str(), "module" | "calendar");
+    let show_card: Option<Rc<dyn Fn()>> = with_card.then(|| {
+        let weak_store: Weak<Store> = Rc::downgrade(store);
+        let (hover, card, ui, line, reqs) = (hover.clone(), card.clone(), ui.clone(), line.clone(), reqs.clone());
+        let card_width = cfg.bar.card_width;
+        let vars = vars.clone();
+        let f: Rc<dyn Fn()> = Rc::new(move || {
+            if hover.open.get() == Some(index) {
+                return;
+            }
+            // the previous module loses its mark
+            hover.open.set(None);
+            if let Some(prev) = hover.open_widget.borrow_mut().take() {
+                prev.remove_css_class("open");
+            }
+            let Some(store) = weak_store.upgrade() else { return };
+            let lookup = |name: &str| store.get(name);
+            let info = ui.info.render(&lookup);
+            let w = &ui.root;
+            let mx = w.compute_bounds(&line).map(|b| b.x() as i32).unwrap_or(0);
+            let bar_width = line.width();
+            let x = if ui.cfg.side == "left" { mx } else { mx + w.width() - card_width };
+            let x = x.clamp(0, (bar_width - card_width).max(0));
+            hover.open.set(Some(index));
+            *hover.open_widget.borrow_mut() = Some(w.clone());
+            w.add_css_class("open");
+            card.show(&ui.cfg, &info, &ui.toggle_values(&lookup), &ui.button_states(&lookup), x, bar_width);
+            // sources that refresh when the card opens take their snapshot now
+            for var in &vars {
+                let _ = reqs.send(Request::Hover(var.clone()));
+            }
+        });
+        f
+    });
+
+    // the mouse: the left button opens or closes the card, where there is
+    // one, and runs `click` otherwise
     let s = scripts.to_string();
     let (click, middle, right) = (m.click.clone(), m.middle.clone(), m.right.clone());
     let gesture = gtk::GestureClick::new();
     gesture.set_button(0);
+    let (hover_c, card_c, show_c) = (hover.clone(), card.clone(), show_card.clone());
     gesture.connect_pressed(move |g, _, _, _| match g.current_button() {
-        1 => runner::detached(&click, &s),
+        1 => match &show_c {
+            Some(show) if hover_c.open.get() == Some(index) => close_card(&hover_c, &card_c),
+            Some(show) => show(),
+            None => runner::detached(&click, &s),
+        },
         2 => runner::detached(&middle, &s),
         3 => runner::detached(&right, &s),
         _ => {}
@@ -782,81 +838,30 @@ fn build_module(
     let s = scripts.to_string();
     let (up, down) = (m.scroll_up.clone(), m.scroll_down.clone());
     let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+    let show_s = show_card.clone();
     scroll.connect_scroll(move |_, _, dy| {
         if dy < 0.0 {
             runner::detached(&up, &s);
         } else if dy > 0.0 {
             runner::detached(&down, &s);
         }
+        if let Some(show) = &show_s {
+            show();
+        }
         glib::Propagation::Stop
     });
     root.add_controller(scroll);
 
-    if !matches!(m.kind.as_str(), "module" | "calendar") {
+    if !with_card {
         return;
     }
-    // the card: opens when the pointer rests on the module for a beat, so
-    // a flick over the bar does not pop cards by; closes a moment after a
-    // leave unless something else was entered meanwhile
-    let weak_store: Weak<Store> = Rc::downgrade(store);
-    let (hover_in, card_in, ui_in, line_in, reqs_in) = (hover.clone(), card.clone(), ui.clone(), line.clone(), reqs.clone());
-    let card_width = cfg.bar.card_width;
-    let open_delay = Duration::from_millis(cfg.bar.hover_delay_ms);
-    let opening: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+    // an enter makes a close scheduled before out of date; a leave
+    // schedules one
     let motion = gtk::EventControllerMotion::new();
-    let opening_in = opening.clone();
-    motion.connect_enter(move |c, _, _| {
-        let Some(w) = c.widget() else { return };
-        if opening_in.borrow().is_some() {
-            return;
-        }
-        // an enter happened: a close the module before scheduled is
-        // out of date
-        hover_in.seq.set(hover_in.seq.get() + 1);
-        let (hover_d, card_d, ui_d, line_d, reqs_d) = (hover_in.clone(), card_in.clone(), ui_in.clone(), line_in.clone(), reqs_in.clone());
-        let (weak_d, vars_d, opening_d) = (weak_store.clone(), vars.clone(), opening_in.clone());
-        opening_in.replace(Some(glib::timeout_add_local_once(open_delay, move || {
-            opening_d.replace(None);
-            if hover_d.open.get() != Some(index) {
-                // the previous module loses its mark
-                hover_d.open.set(None);
-                if let Some(prev) = hover_d.open_widget.borrow_mut().take() {
-                    prev.remove_css_class("open");
-                }
-            }
-            let Some(store) = weak_d.upgrade() else { return };
-            let lookup = |name: &str| store.get(name);
-            let info = ui_d.info.render(&lookup);
-            let mx = w.compute_bounds(&line_d).map(|b| b.x() as i32).unwrap_or(0);
-            let mw = w.width();
-            let bar_width = line_d.width();
-            let x = if ui_d.cfg.side == "left" { mx } else { mx + mw - card_width };
-            let x = x.clamp(0, (bar_width - card_width).max(0));
-            hover_d.open.set(Some(index));
-            *hover_d.open_widget.borrow_mut() = Some(ui_d.root.clone());
-            w.add_css_class("open");
-            card_d.show(
-                &ui_d.cfg,
-                &info,
-                &ui_d.toggle_values(&lookup),
-                &ui_d.button_states(&lookup),
-                x,
-                bar_width,
-            );
-            // sources that refresh on hover take their snapshot now
-            for var in &vars_d {
-                let _ = reqs_d.send(Request::Hover(var.clone()));
-            }
-        })));
-    });
-    let (hover_out, card_out, opening_out) = (hover.clone(), card.clone(), opening.clone());
+    let h = hover.clone();
+    motion.connect_enter(move |_, _, _| h.seq.set(h.seq.get() + 1));
+    let (hover_out, card_out) = (hover.clone(), card.clone());
     let close_delay = Duration::from_millis(cfg.bar.leave_delay_ms);
-    motion.connect_leave(move |_| {
-        // a rest that never became an open is simply cancelled
-        if let Some(id) = opening_out.borrow_mut().take() {
-            id.remove();
-        }
-        schedule_close(&hover_out, &card_out, close_delay);
-    });
+    motion.connect_leave(move |_| schedule_close(&hover_out, &card_out, close_delay));
     root.add_controller(motion);
 }

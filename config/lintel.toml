@@ -12,8 +12,7 @@
 height = 28
 card_width = 360
 # scripts = "/path/to/your/scripts"   # $S in the commands
-hover_delay_ms = 120     # rest this long before a module's card opens
-leave_delay_ms = 150
+leave_delay_ms = 150     # a card stays this long after the pointer leaves
 coalesce_ms = 100
 
 [picker]
@@ -175,10 +174,12 @@ title = "Scratchpad"
 text = "{scratchpad.text}"
 info = "{scratchpad.info}"
 class = "{scratchpad.class}"
-click = "swaymsg scratchpad show"
 middle = "swaymsg floating disable"
-right = "swaymsg move scratchpad"
-hints = [["L 1", "show / cycle"], ["M 2", "take out"], ["R 3", "put in"]]
+right = "swaymsg scratchpad show"
+hints = [["M 2", "take out"], ["R 3", "show / cycle"]]
+
+[[module.buttons]]
+items = [{ text = "Put the window in", command = "swaymsg move scratchpad" }]
 
 [[module]]
 name = "mode"
@@ -191,10 +192,12 @@ name = "launcher"
 title = "Launcher"
 text = "󰕰"
 info = "the bar's picker"
-click = "lintel launch"
 middle = "lintel windows"
-right = "swaymsg '[workspace=__focused__] kill'"
-hints = [["L 1", "applications"], ["M 2", "windows"], ["R 3", "close the workspace"]]
+right = "lintel launch"
+hints = [["M 2", "windows"], ["R 3", "applications"]]
+
+[[module.buttons]]
+items = [{ text = "Close the workspace", command = "swaymsg '[workspace=__focused__] kill'" }]
 
 [[module]]
 name = "pomodoro"
@@ -202,10 +205,9 @@ title = "Pomodoro"
 text = "{pomodoro.text}"
 info = "{pomodoro.info}"
 class = "{pomodoro.class}"
-click = "lintel pomodoro toggle"
 middle = "lintel pomodoro skip"
-right = "lintel pomodoro stop"
-hints = [["L 1", "start / pause"], ["M 2", "skip the phase"], ["R 3", "stop the session"]]
+right = "lintel pomodoro toggle"
+hints = [["M 2", "skip the phase"], ["R 3", "start / pause"]]
 # in the card: a countdown, independent of the session; the label is its
 # key (the same label again restarts it) and its notification's title
 input = { prompt = "Minutes", default = "7", label = "Label", label_default = "Countdown", button = "Start", command = "lintel timer {value}m {label}" }
@@ -251,12 +253,14 @@ text = "| {scratchpad.class|if:󰄷|or:} {sway.title}"
 hide_when = "|  "
 max_chars = 60
 info = "{sway.title}"
-click = "swaymsg floating toggle"
 middle = "swaymsg fullscreen toggle"
-right = "swaymsg kill"
+right = "swaymsg floating toggle"
 scroll_up = "swaymsg focus prev"
 scroll_down = "swaymsg focus next"
-hints = [["L 1", "float"], ["M 2", "fullscreen"], ["R 3", "close"], ["⇅ 4/5", "focus previous / next"]]
+hints = [["M 2", "fullscreen"], ["R 3", "float"], ["⇅ 4/5", "focus previous / next"]]
+
+[[module.buttons]]
+items = [{ text = "Close the window", command = "swaymsg kill" }]
 
 # ---- modules: right ----------------------------------------------------
 
@@ -271,12 +275,14 @@ hide_when = "| "
 max_chars = 60
 info = "{mpris.info}"
 class = "{mpris.class}"
-click = "playerctl play-pause"
-middle = "playerctld shift"
-right = "playerctl next"
+middle = "playerctl next"
+right = "playerctl play-pause"
 scroll_up = "playerctl volume 0.05+"
 scroll_down = "playerctl volume 0.05-"
-hints = [["L 1", "play / pause"], ["M 2", "next player"], ["R 3", "next track"], ["⇅ 4/5", "volume"]]
+hints = [["M 2", "next track"], ["R 3", "play / pause"], ["⇅ 4/5", "volume"]]
+
+[[module.buttons]]
+items = [{ text = "Next player", command = "playerctld shift" }]
 
 [[module]]
 name = "recording"
@@ -285,8 +291,8 @@ title = "Recording"
 text = "{recording}"
 info = "wf-recorder is running"
 class = "recording"
-click = "pkill -INT -x wf-recorder; lintel refresh recording"
-hints = [["L 1", "stop"]]
+right = "pkill -INT -x wf-recorder; lintel refresh recording"
+hints = [["R 3", "stop"]]
 
 [[module]]
 name = "volume"
@@ -294,11 +300,13 @@ side = "right"
 title = "Audio output"
 text = "{audio.sink.text}"
 info = "{audio.sink.info}"
-click = "pavucontrol"
 right = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 scroll_up = "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 2%+"
 scroll_down = "wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"
-hints = [["L 1", "mixer"], ["R 3", "mute"], ["⇅ 4/5", "volume"]]
+hints = [["R 3", "mute"], ["⇅ 4/5", "volume"]]
+
+[[module.buttons]]
+items = [{ text = "Mixer", command = "pavucontrol" }]
 
 [[module]]
 name = "mic"
@@ -306,11 +314,13 @@ side = "right"
 title = "Audio input"
 text = "{audio.source.text}"
 info = "{audio.source.info}"
-click = "pavucontrol -t 4"
 right = "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
 scroll_up = "wpctl set-volume -l 1 @DEFAULT_AUDIO_SOURCE@ 2%+"
 scroll_down = "wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 2%-"
-hints = [["L 1", "mixer"], ["R 3", "mute"], ["⇅ 4/5", "volume"]]
+hints = [["R 3", "mute"], ["⇅ 4/5", "volume"]]
+
+[[module.buttons]]
+items = [{ text = "Mixer", command = "pavucontrol -t 4" }]
 
 [[module]]
 name = "display"
@@ -318,8 +328,8 @@ side = "right"
 title = "Display"
 text = "{display.text}"
 info = "{display.info}"
-click = "nwg-displays"
-hints = [["L 1", "settings"]]
+right = "nwg-displays"
+hints = [["R 3", "settings"]]
 
 [[module]]
 name = "brightness"
@@ -338,8 +348,8 @@ side = "right"
 title = "Bluetooth"
 text = "{bluetooth.text}"
 info = "{bluetooth.info}"
-click = "blueman-manager"
-hints = [["L 1", "manager"]]
+right = "blueman-manager"
+hints = [["R 3", "manager"]]
 
 [[module]]
 name = "network"
@@ -347,8 +357,8 @@ side = "right"
 title = "Network"
 text = "{network.text}"
 info = "{network.info}"
-click = "alacritty -e impala"
-hints = [["L 1", "impala"]]
+right = "alacritty -e impala"
+hints = [["R 3", "impala"]]
 
 [[module]]
 name = "battery"
