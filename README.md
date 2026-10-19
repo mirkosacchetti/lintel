@@ -289,7 +289,9 @@ without a card, `list`, `tray`, `calendar`), `title`, `text`, `info`,
 `class` (templates), `markup` (pango), `max_chars` (the text's width at
 most; when the bar is short of room this label shrinks first),
 `hide_when`, `middle`, `right`, `scroll_up`, `scroll_down` (`click` too,
-for a `label`: a module with a card opens it on the left button),
+for a `label`: a module with a card opens it on the left button;
+`card_on_right = true` swaps them, the left button runs `right` and the
+right one opens the card),
 `hints` (badge and text pairs), `input` (`prompt`, `default`, `label`,
 `label_default`, `button`, `command` with `{value}` and `{label}`),
 `[[module.toggles]]` (`label`, `detail`, `state`, `on`, `off`; the state

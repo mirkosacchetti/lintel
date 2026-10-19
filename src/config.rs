@@ -378,6 +378,11 @@ pub struct Module {
     pub middle: String,
     #[serde(default)]
     pub right: String,
+    /// Buttons swapped: the left button runs `right`, the right one opens
+    /// the card (the scratchpad, whose show/hide is the action of every
+    /// click).
+    #[serde(default)]
+    pub card_on_right: bool,
     #[serde(default)]
     pub scroll_up: String,
     #[serde(default)]

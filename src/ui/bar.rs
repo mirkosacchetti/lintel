@@ -818,20 +818,22 @@ fn build_module(
     });
 
     // the mouse: the left button opens or closes the card, where there is
-    // one, and runs `click` otherwise
+    // one, and runs `click` otherwise; the right one runs `right`
     let s = scripts.to_string();
     let (click, middle, right) = (m.click.clone(), m.middle.clone(), m.right.clone());
     let gesture = gtk::GestureClick::new();
     gesture.set_button(0);
     let (hover_c, card_c, show_c) = (hover.clone(), card.clone(), show_card.clone());
+    // `card_on_right` swaps the left and the right button
+    let (card_button, action_button) = if m.card_on_right { (3, 1) } else { (1, 3) };
     gesture.connect_pressed(move |g, _, _, _| match g.current_button() {
-        1 => match &show_c {
+        b if b == card_button => match &show_c {
             Some(show) if hover_c.open.get() == Some(index) => close_card(&hover_c, &card_c),
             Some(show) => show(),
             None => runner::detached(&click, &s),
         },
         2 => runner::detached(&middle, &s),
-        3 => runner::detached(&right, &s),
+        b if b == action_button => runner::detached(&right, &s),
         _ => {}
     });
     root.add_controller(gesture);
