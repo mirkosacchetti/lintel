@@ -118,6 +118,9 @@ enum Incoming {
 
 struct Server {
     tx: mpsc::UnboundedSender<Incoming>,
+    /// Paused or zen: the spec's `Inhibited` (1.3), so that an app
+    /// that plays its own sound (Telegram) keeps quiet.
+    inhibited: bool,
 }
 
 fn hint_str(h: &HashMap<String, OwnedValue>, key: &str) -> String {
@@ -179,7 +182,7 @@ fn hint_image(h: &HashMap<String, OwnedValue>) -> Option<Image> {
 #[zbus::interface(name = "org.freedesktop.Notifications")]
 impl Server {
     fn get_capabilities(&self) -> Vec<String> {
-        ["body", "body-markup", "actions", "icon-static", "persistence", "x-dunst-stack-tag"]
+        ["body", "body-markup", "actions", "icon-static", "persistence", "inhibitions", "x-dunst-stack-tag"]
             .iter()
             .map(|s| s.to_string())
             .collect()
@@ -251,7 +254,12 @@ impl Server {
     }
 
     fn get_server_information(&self) -> (String, String, String, String) {
-        ("lintel".into(), "lintel".into(), env!("CARGO_PKG_VERSION").into(), "1.2".into())
+        ("lintel".into(), "lintel".into(), env!("CARGO_PKG_VERSION").into(), "1.3".into())
+    }
+
+    #[zbus(property)]
+    fn inhibited(&self) -> bool {
+        self.inhibited
     }
 
     #[zbus(signal)]
@@ -373,7 +381,7 @@ pub async fn run(hub: Hub, mut events: mpsc::UnboundedReceiver<NotifyEvent>, mut
 
 async fn serve(tx: mpsc::UnboundedSender<Incoming>) -> Result<Connection> {
     let conn = Connection::session().await?;
-    conn.object_server().at(PATH, Server { tx }).await?;
+    conn.object_server().at(PATH, Server { tx, inhibited: false }).await?;
     conn.request_name("org.freedesktop.Notifications")
         .await
         .context("owning org.freedesktop.Notifications")?;
@@ -492,6 +500,18 @@ impl Daemon {
         self.publish();
     }
 
+    /// The `Inhibited` property on the bus follows pause and zen.
+    async fn set_inhibited(&self) {
+        let inhibited = self.paused || self.zen;
+        if let Ok(iface) = self.conn.object_server().interface::<_, Server>(PATH).await {
+            let mut server = iface.get_mut().await;
+            if server.inhibited != inhibited {
+                server.inhibited = inhibited;
+                let _ = server.inhibited_changed(iface.signal_emitter()).await;
+            }
+        }
+    }
+
     async fn signal_closed(&self, id: u32, reason: u32) {
         if let Ok(iface) = self.conn.object_server().interface::<_, Server>(PATH).await {
             let _ = Server::notification_closed(iface.signal_emitter(), id, reason).await;
@@ -599,6 +619,7 @@ impl Daemon {
             }
             "toggle" => {
                 self.paused = !self.paused;
+                self.set_inhibited().await;
                 self.publish();
                 if self.paused {
                     "paused".into()
@@ -610,6 +631,7 @@ impl Daemon {
             // from the zen source, not a user command
             "zen on" | "zen off" => {
                 self.zen = cmd == "zen on";
+                self.set_inhibited().await;
                 self.publish();
                 "ok".into()
             }
