@@ -368,9 +368,10 @@ text = "{battery.text}"
 info = "{battery.info}"
 class = "{battery.class}"
 
-# the system's controls in one card: the uptime, the power actions, the
-# CPU's power profile (the one in use is marked), and switches for
-# Tailscale, Syncthing and the night light
+# the system's controls in one card: the power actions under the title,
+# the uptime, the CPU's power profile (the one in use is marked),
+# switches for Tailscale, Syncthing, the night light and zen, and the
+# last five notifications
 [[module]]
 name = "controls"
 side = "right"
@@ -379,7 +380,7 @@ text = ""
 info = "{power-info}"
 
 [[module.buttons]]
-label = "Power"
+top = true
 items = [
   { text = "󰌾 Lock", command = "swaylock" },
   { text = "󰤄 Suspend", command = "systemctl suspend" },
@@ -424,6 +425,13 @@ detail = "{zen.info}"
 state = "{zen.active}"
 on = "lintel zen on"
 off = "lintel zen off"
+
+[module.rows]
+label = "Notifications"
+items = "notifications.recent"
+max = 5
+title = "{clock}  {app}"
+detail = "{text}"
 
 # the date and time; the card carries the month's calendar: ‹ and › or a
 # scroll change the month, the month name returns to today, q or Escape

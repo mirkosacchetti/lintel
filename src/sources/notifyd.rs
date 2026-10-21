@@ -11,7 +11,9 @@
 //!
 //! Timers are deadlines: the task sleeps until the next expiry or the
 //! next message. Emits `notifications` = {text, info, class, count,
-//! paused} for a module that wants a bell.
+//! paused, recent} for a module that wants a bell, or the latest in a
+//! card (`recent`: clock, app, summary, body, text, newest first; the
+//! clock with "Yesterday" or the date when not today's).
 
 use super::picker;
 use super::Hub;
@@ -337,6 +339,8 @@ pub async fn run(hub: Hub, mut events: mpsc::UnboundedReceiver<NotifyEvent>, mut
     loop {
         let next = d.deadlines.values().min().copied();
         tokio::select! {
+            // today's become yesterday's: the clocks in `recent` again
+            _ = tokio::time::sleep(until_midnight()) => d.publish(),
             Some(msg) = incoming.recv() => match msg {
                 Incoming::Note(n) => d.show(*n).await,
                 Incoming::CloseRequest(id) => d.close(id, CLOSED_BY_CALL).await,
@@ -439,6 +443,7 @@ impl Daemon {
             *slot = n.clone();
             self.arm(&n);
             self.hub.notify(NotifyUpdate::Show(Box::new(n)));
+            self.publish();
             return;
         }
         if self.visible.len() >= self.cfg().max_visible {
@@ -688,9 +693,22 @@ impl Daemon {
         } else if self.zen {
             info = format!("Zen\n{info}");
         }
+        // on screen and in the history, newest first (the later id within
+        // a second), for a card's rows
+        let mut recent: Vec<&Note> = self.visible.iter().chain(self.history.iter()).collect();
+        recent.sort_by_key(|n| std::cmp::Reverse((n.time, n.id)));
+        let recent: Vec<serde_json::Value> = recent
+            .iter()
+            .map(|n| {
+                let (summary, body) = (plain(&n.summary), plain(&n.body));
+                let text = if body.is_empty() { summary.clone() } else { format!("{summary}: {body}") };
+                json!({ "clock": when(n.time), "app": n.app, "summary": summary, "body": body, "text": text })
+            })
+            .collect();
         json!({
             "text": icon.to_string(), "info": info, "class": class,
             "count": self.history.len(), "visible": self.visible.len(), "paused": self.paused, "zen": self.zen,
+            "recent": recent,
         })
     }
 
@@ -706,6 +724,28 @@ fn wall_time(unix: u64) -> String {
         .single()
         .map(|t| t.format("%H:%M").to_string())
         .unwrap_or_default()
+}
+
+/// The time for today's, "Yesterday" and the time for yesterday's, the
+/// date and the time before that.
+fn when(unix: u64) -> String {
+    use chrono::TimeZone;
+    let Some(t) = chrono::Local.timestamp_opt(unix as i64, 0).single() else {
+        return String::new();
+    };
+    let days = (chrono::Local::now().date_naive() - t.date_naive()).num_days();
+    match days {
+        0 => t.format("%H:%M").to_string(),
+        1 => t.format("Yesterday %H:%M").to_string(),
+        _ => t.format("%y-%m-%d %H:%M").to_string(),
+    }
+}
+
+/// To the next local midnight, and a second past it.
+fn until_midnight() -> Duration {
+    let now = chrono::Local::now();
+    let next = (now.date_naive() + chrono::Days::new(1)).and_hms_opt(0, 0, 1).unwrap_or_default();
+    (next - now.naive_local()).to_std().unwrap_or(Duration::from_secs(3600))
 }
 
 /// Markup tags out, whitespace collapsed.

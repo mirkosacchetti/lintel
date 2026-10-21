@@ -1,7 +1,8 @@
 //! One output's bar and its popup. The bar is a layer-shell window at
 //! the top with the modules on the left and the right; the popup is a
 //! second, transparent, full-width window right under it, mapped while a
-//! card shows: a left click on a module opens its card under it, with the
+//! card shows: a left click on a module opens its card centred under it
+//! (kept on the screen, the card's gap from its edges), with the
 //! module's title, its information, its switches and buttons, its input
 //! row and its mouse actions; a click on another module moves the card
 //! there, and the pointer leaving closes it. The
@@ -86,12 +87,20 @@ struct Card {
     toggle_rows: RefCell<Vec<(gtk::Label, gtk::Switch)>>,
     /// Set while a switch is moved to show a state, not by the user.
     quiet: Cell<bool>,
-    /// The module's rows of buttons, over the switches: each button with
-    /// its value.
+    /// The module's rows of buttons, over the switches, and those under
+    /// the title (`top`): each button with its value.
     buttons: gtk::Box,
+    top_buttons: gtk::Box,
     button_rows: RefCell<Vec<Vec<(gtk::Button, String)>>>,
+    /// The rows from an array, under the switches (the latest
+    /// notifications).
+    rows: gtk::Box,
     scripts: String,
 }
+
+/// The card's gap under the bar (`.card { margin-top }` in the style),
+/// kept from the screen's edges too; the notifications keep it as well.
+pub const GAP: i32 = 6;
 
 /// A switch's state template, rendered: on unless it says otherwise.
 fn truthy(s: &str) -> bool {
@@ -134,14 +143,21 @@ impl Card {
         toggles.add_css_class("toggles");
         let buttons = gtk::Box::new(gtk::Orientation::Vertical, 0);
         buttons.add_css_class("buttons");
+        let top_buttons = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        top_buttons.add_css_class("buttons");
+        top_buttons.add_css_class("top");
+        let rows = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        rows.add_css_class("rows");
         let hints = gtk::Grid::new();
         hints.add_css_class("hints");
         hints.set_column_homogeneous(true);
         frame.append(&title);
+        frame.append(&top_buttons);
         frame.append(&info);
         frame.append(&calendar.root);
         frame.append(&buttons);
         frame.append(&toggles);
+        frame.append(&rows);
         frame.append(&input_row);
         frame.append(&hints);
         fixed.put(&frame, 0.0, 0.0);
@@ -164,7 +180,9 @@ impl Card {
             toggle_rows: RefCell::new(Vec::new()),
             quiet: Cell::new(false),
             buttons,
+            top_buttons,
             button_rows: RefCell::new(Vec::new()),
+            rows,
             scripts: scripts.to_string(),
         })
     }
@@ -185,12 +203,25 @@ impl Card {
     }
 
     /// `toggles`: each switch's line and state, rendered; `states`: each
-    /// button row's state.
-    fn show(self: &Rc<Self>, module: &Module, info: &str, toggles: &[(String, bool)], states: &[String], x: i32, bar_width: i32) {
+    /// button row's state; `rows`: the rows' lines, rendered; `mx`, `mw`:
+    /// the module's place and width in the bar.
+    #[allow(clippy::too_many_arguments)]
+    fn show(
+        self: &Rc<Self>,
+        module: &Module,
+        info: &str,
+        toggles: &[(String, bool)],
+        states: &[String],
+        rows: &[(String, String)],
+        mx: i32,
+        mw: i32,
+        bar_width: i32,
+    ) {
         self.title.set_text(&module.title);
         self.set_info(info, module.markup);
         self.show_toggles(module, toggles);
         self.show_buttons(module, states);
+        self.show_rows(module, rows);
         // the calendar opens on the current month, like its own window did
         let with_calendar = module.kind == "calendar";
         self.calendar.root.set_visible(with_calendar);
@@ -244,16 +275,14 @@ impl Card {
         }
         self.hints.set_visible(!hints.is_empty());
         self.frame.set_visible(true);
-        // the calendar pins to the monitor's right edge, with the same
-        // gap it keeps under the bar, by the card's real width (its
-        // content can grow past card_width); the frame is measured
-        // visible, a hidden widget measures zero
-        let x = if module.kind == "calendar" && module.side == "right" {
-            let (_, width, _, _) = self.frame.measure(gtk::Orientation::Horizontal, -1);
-            bar_width - width - 6
-        } else {
-            x
-        };
+        // placed by the card's real width (its content can grow past
+        // card_width), measured visible, a hidden widget measures zero:
+        // centred under the module, then pushed in so the whole card is
+        // on the screen, never closer to its edges than the gap under
+        // the bar
+        let (_, width, _, _) = self.frame.measure(gtk::Orientation::Horizontal, -1);
+        let x = mx + (mw - width) / 2;
+        let x = x.min(bar_width - width - GAP).max(GAP);
         self.fixed.move_(&self.frame, x as f64, 0.0);
         if !self.popup.is_visible() {
             self.popup.present();
@@ -337,8 +366,10 @@ impl Card {
     /// The rows of buttons, built anew for the module shown; a click
     /// runs the button's command.
     fn show_buttons(&self, module: &Module, states: &[String]) {
-        while let Some(c) = self.buttons.first_child() {
-            self.buttons.remove(&c);
+        for b in [&self.buttons, &self.top_buttons] {
+            while let Some(c) = b.first_child() {
+                b.remove(&c);
+            }
         }
         let mut rows = Vec::new();
         for r in &module.buttons {
@@ -361,10 +392,15 @@ impl Card {
                 buttons.push((button, b.value.clone()));
             }
             row.append(&line);
-            self.buttons.append(&row);
+            if r.top {
+                self.top_buttons.append(&row);
+            } else {
+                self.buttons.append(&row);
+            }
             rows.push(buttons);
         }
-        self.buttons.set_visible(!rows.is_empty());
+        self.buttons.set_visible(module.buttons.iter().any(|r| !r.top));
+        self.top_buttons.set_visible(module.buttons.iter().any(|r| r.top));
         *self.button_rows.borrow_mut() = rows;
         self.update_buttons(states);
     }
@@ -380,6 +416,42 @@ impl Card {
                 }
             }
         }
+    }
+
+    /// The rows, built anew for the module shown and on every change of
+    /// their array: labels only, nothing to keep. Hidden, caption and
+    /// all, when the array is empty.
+    fn show_rows(&self, module: &Module, values: &[(String, String)]) {
+        while let Some(c) = self.rows.first_child() {
+            self.rows.remove(&c);
+        }
+        let label = module.rows.as_ref().map(|r| r.label.as_str()).unwrap_or("");
+        if !label.is_empty() && !values.is_empty() {
+            let caption = gtk::Label::new(Some(label));
+            caption.add_css_class("name");
+            caption.set_xalign(0.0);
+            self.rows.append(&caption);
+        }
+        for (title, detail) in values {
+            let row = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            row.add_css_class("row");
+            for (text, class) in [(title, "title"), (detail, "detail")] {
+                if text.is_empty() {
+                    continue;
+                }
+                // a width of one character asked, the rest taken: the row
+                // fills the card and never widens it, however long the text
+                let l = gtk::Label::new(Some(text));
+                l.add_css_class(class);
+                l.set_xalign(0.0);
+                l.set_max_width_chars(1);
+                l.set_hexpand(true);
+                l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                row.append(&l);
+            }
+            self.rows.append(&row);
+        }
+        self.rows.set_visible(!values.is_empty());
     }
 
     fn set_info(&self, text: &str, markup: bool) {
@@ -450,6 +522,8 @@ struct ModuleUi {
     toggles: Vec<(Template, Template)>,
     /// The button rows' state templates.
     button_states: Vec<Template>,
+    /// The rows' title and detail templates, over each item.
+    rows: (Template, Template),
     prev_class: RefCell<Vec<String>>,
 }
 
@@ -463,6 +537,21 @@ impl ModuleUi {
 
     fn button_states(&self, lookup: &dyn Fn(&str) -> Option<serde_json::Value>) -> Vec<String> {
         self.button_states.iter().map(|t| t.render(lookup)).collect()
+    }
+
+    /// The first `max` items of the rows' array, rendered.
+    fn row_values(&self, lookup: &dyn Fn(&str) -> Option<serde_json::Value>) -> Vec<(String, String)> {
+        let Some(rows) = &self.cfg.rows else { return Vec::new() };
+        let (var, path) = rows.items.split_once('.').unwrap_or((&rows.items, ""));
+        let Some(root) = lookup(var) else { return Vec::new() };
+        let Some(serde_json::Value::Array(list)) = crate::template::walk_path(&root, path) else {
+            return Vec::new();
+        };
+        let (title, detail) = &self.rows;
+        list.iter()
+            .take(rows.max.unwrap_or(usize::MAX))
+            .map(|item| (title.render_item(item), detail.render_item(item)))
+            .collect()
     }
 }
 
@@ -729,6 +818,11 @@ fn build_module(
             .map(|t| (Template::parse(&t.detail), Template::parse(&t.state)))
             .collect(),
         button_states: m.buttons.iter().map(|r| Template::parse(&r.state)).collect(),
+        rows: m
+            .rows
+            .as_ref()
+            .map(|r| (Template::parse(&r.title), Template::parse(&r.detail)))
+            .unwrap_or_else(|| (Template::parse(""), Template::parse(""))),
         prev_class: RefCell::new(Vec::new()),
     });
 
@@ -742,6 +836,7 @@ fn build_module(
         .chain(ui.toggles.iter().flat_map(|(d, s)| d.vars().iter().chain(s.vars())))
         .chain(ui.button_states.iter().flat_map(|t| t.vars()))
         .cloned()
+        .chain(m.rows.iter().map(|r| r.items.split('.').next().unwrap_or("").to_string()))
         .collect();
     vars.sort();
     vars.dedup();
@@ -771,6 +866,9 @@ fn build_module(
                 card.set_info(&ui.info.render(&lookup), ui.cfg.markup);
                 card.update_toggles(&ui.toggle_values(&lookup));
                 card.update_buttons(&ui.button_states(&lookup));
+                if ui.cfg.rows.is_some() {
+                    card.show_rows(&ui.cfg, &ui.row_values(&lookup));
+                }
             }
         })
     };
@@ -786,7 +884,6 @@ fn build_module(
     let show_card: Option<Rc<dyn Fn()>> = with_card.then(|| {
         let weak_store: Weak<Store> = Rc::downgrade(store);
         let (hover, card, ui, line, reqs) = (hover.clone(), card.clone(), ui.clone(), line.clone(), reqs.clone());
-        let card_width = cfg.bar.card_width;
         let vars = vars.clone();
         let f: Rc<dyn Fn()> = Rc::new(move || {
             if hover.open.get() == Some(index) {
@@ -802,13 +899,11 @@ fn build_module(
             let info = ui.info.render(&lookup);
             let w = &ui.root;
             let mx = w.compute_bounds(&line).map(|b| b.x() as i32).unwrap_or(0);
-            let bar_width = line.width();
-            let x = if ui.cfg.side == "left" { mx } else { mx + w.width() - card_width };
-            let x = x.clamp(0, (bar_width - card_width).max(0));
             hover.open.set(Some(index));
             *hover.open_widget.borrow_mut() = Some(w.clone());
             w.add_css_class("open");
-            card.show(&ui.cfg, &info, &ui.toggle_values(&lookup), &ui.button_states(&lookup), x, bar_width);
+            let (toggles, states, rows) = (ui.toggle_values(&lookup), ui.button_states(&lookup), ui.row_values(&lookup));
+            card.show(&ui.cfg, &info, &toggles, &states, &rows, mx, w.width(), line.width());
             // sources that refresh when the card opens take their snapshot now
             for var in &vars {
                 let _ = reqs.send(Request::Hover(var.clone()));

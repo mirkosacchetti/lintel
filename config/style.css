@@ -117,6 +117,13 @@ label { padding: 0; margin: 0; }
 .card .button-row button:hover { background-color: #304860; }
 .card .button-row button.active { background-color: #4d86b0; }
 .card .button-row button label { font-size: 12px; }
+/* a row under the title (the power actions): the gap below it instead */
+.card .buttons.top .button-row { margin-top: 0; margin-bottom: 12px; }
+/* the card's rows from an array (the latest notifications), under the
+   switches: a line, and a smaller one under it */
+.card .rows { margin-top: 16px; }
+.card .rows .row { padding: 4px 0; }
+.card .rows .detail { color: #8bc9eb; font-size: 12px; }
 /* the card's input row: a field and a button */
 .card .input { margin-top: 8px; }
 .card entry {
@@ -201,12 +208,8 @@ popover.tray-menu separator { background-color: #4d86b0; min-height: 1px; margin
 .picker .row.child { margin-left: 32px; }
 .picker .row.child label { font-size: 13px; }
 
-/* the notifications: cards under the bar, the frame says the urgency */
-.notification {
-  background-color: #16242d;
-  border: 1px solid #d6e2ee;
-}
-.notification .inner { padding: 10px 12px; }
+/* the notifications: the modules' .card, under the bar at the right;
+   the frame says the urgency */
 .notification.low { border-color: #304860; }
 .notification.critical { border-color: #bf616a; }
 .notification .summary { font-weight: bold; }

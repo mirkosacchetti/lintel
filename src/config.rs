@@ -163,16 +163,6 @@ pub struct NotificationsConfig {
     /// Own org.freedesktop.Notifications and draw the notifications.
     #[serde(default = "yes")]
     pub enabled: bool,
-    /// "top-left", "top-center" or "top-right".
-    #[serde(default = "default_position")]
-    pub position: String,
-    /// Pixels from the bar, and from the side.
-    #[serde(default = "d16i")]
-    pub offset: i32,
-    #[serde(default = "default_notification_width")]
-    pub width: i32,
-    #[serde(default = "d8i")]
-    pub gap: i32,
     #[serde(default = "d48i")]
     pub icon_size: i32,
     #[serde(default = "d5us")]
@@ -190,18 +180,6 @@ pub struct NotificationsConfig {
 
 fn yes() -> bool {
     true
-}
-fn default_position() -> String {
-    "top-center".into()
-}
-fn default_notification_width() -> i32 {
-    420
-}
-fn d16i() -> i32 {
-    16
-}
-fn d8i() -> i32 {
-    8
 }
 fn d48i() -> i32 {
     48
@@ -223,10 +201,6 @@ impl Default for NotificationsConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            position: default_position(),
-            offset: d16i(),
-            width: default_notification_width(),
-            gap: d8i(),
             icon_size: d48i(),
             max_visible: d5us(),
             history: d20us(),
@@ -414,6 +388,10 @@ pub struct Module {
     /// (`[[module.buttons]]`).
     #[serde(default)]
     pub buttons: Vec<ButtonRow>,
+    /// Rows from an array at the bottom of the card (`[module.rows]`):
+    /// the latest notifications.
+    #[serde(default)]
+    pub rows: Option<Rows>,
     /// For "tray": the icons' size in pixels, and the gap between them.
     #[serde(default = "default_icon_size")]
     pub icon_size: i32,
@@ -476,6 +454,9 @@ pub struct Toggle {
 pub struct ButtonRow {
     #[serde(default)]
     pub label: String,
+    /// Under the card's title, over the information (the power actions).
+    #[serde(default)]
+    pub top: bool,
     /// A template.
     #[serde(default)]
     pub state: String,
@@ -489,6 +470,24 @@ pub struct Button {
     pub command: String,
     #[serde(default)]
     pub value: String,
+}
+
+/// Rows in a module's card, under the switches: one per item of an
+/// array, the first `max` of them, each a line and a smaller one under
+/// it that ends in an ellipsis. `title` and `detail` are templates over
+/// the item's fields (`{clock}`, `{app}`); the rows follow the array.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct Rows {
+    #[serde(default)]
+    pub label: String,
+    /// The variable holding the array (`notifications.recent`).
+    pub items: String,
+    #[serde(default)]
+    pub max: Option<usize>,
+    pub title: String,
+    #[serde(default)]
+    pub detail: String,
 }
 
 fn default_button() -> String {

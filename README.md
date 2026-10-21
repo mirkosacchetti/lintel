@@ -76,7 +76,11 @@ A **source** produces a variable, a JSON value. Its kind says how:
 | `static`      | a constant, until `lintel update` changes it                                               |
 
 Output that is not JSON is taken as a string. The notification daemon
-fills a `notifications` variable of its own.
+fills a `notifications` variable of its own; its `recent` array holds
+those on screen and in the history, newest first (`clock`, `app`,
+`summary`, `body`, `text`; the clock is the time for today's,
+"Yesterday" and the time, or the date and the time), for a card's
+`rows`.
 
 ### Triggers
 
@@ -119,7 +123,10 @@ the title, the information, and what the module declares:
   follows its variables, so a change made elsewhere shows at once.
 - `buttons`: rows of buttons with a caption. With a `state` the row is
   a choice, and the button whose value matches is marked (the power
-  profile in use).
+  profile in use); with `top` the row goes under the title, over the
+  information (the power actions).
+- `rows`: a line and a smaller one under it, ellipsized, for each item
+  of an array, the first `max`: the latest notifications.
 - `input`: a value field, a label field and a button (a countdown's
   minutes and name). The card takes the keyboard while it is open.
 - `hints`: the module's mouse actions, as a table.
@@ -171,7 +178,7 @@ leads and frecency pushes.
 ### The notifications
 
 lintel owns `org.freedesktop.Notifications` and draws the notifications
-under the bar: icon or image, summary, body with markup, a progress bar
+under the bar, at the right, as cards like the modules': icon or image, summary, body with markup, a progress bar
 for the `value` hint, actions as buttons. Each urgency has its frame and
 timeout; `replaces_id` and the `x-dunst-stack-tag` hint replace in
 place; a history keeps the last ones; a pause sends new ones straight to
@@ -271,10 +278,9 @@ answer.
 entries that want one), `scratchpad` (a command that brings a scratchpad
 window up, `{id}` its con id; by default sway's own focus).
 
-`[notifications]`: `enabled`, `position` (top-left, top-center,
-top-right), `offset`, `width`, `gap`, `icon_size`, `max_visible`,
-`history`, `timeout_low`, `timeout_normal`, `timeout_critical` (seconds,
-0 until closed).
+`[notifications]`: `enabled`, `icon_size`, `max_visible`, `history`,
+`timeout_low`, `timeout_normal`, `timeout_critical` (seconds, 0 until
+closed). The cards take `card_width` and the style's `.card`.
 
 `[pomodoro]`: `work_minutes`, `short_break_minutes`,
 `long_break_minutes`, `pomodori_until_long`, `pomodori_per_session`,
@@ -296,8 +302,9 @@ right one opens the card),
 `label_default`, `button`, `command` with `{value}` and `{label}`),
 `[[module.toggles]]` (`label`, `detail`, `state`, `on`, `off`; the state
 is off when it renders "", false, 0, null or off),
-`[[module.buttons]]` (`label`, `state`, `items` with `text`, `command`
-and `value`).
+`[[module.buttons]]` (`label`, `state`, `top`, `items` with `text`, `command`
+and `value`), `[module.rows]` (`label`, `items` the array, `max`,
+`title` and `detail` templates over each item).
 For `list`: `items` (the array, `sway.workspaces`), `item_text`,
 `item_class`, `item_click`, `item_middle`, `item_right`, templates over
 each item. For `tray`: `icon_size`, `spacing`.
@@ -313,7 +320,7 @@ name, its `class` template's output, and `open` while its card shows; a
 list has `list` and its name, its buttons `item` and their class. In
 the card: `.card`, `.card-title`, `.toggles` and `.toggle` (`.name`,
 `.detail`, `switch`), `.buttons` and `.button-row` (buttons `.active`
-when chosen), `.input`, `.hints`, `.hint`, `.key`, and the calendar's
+when chosen), `.rows` and `.row` (`.title`, `.detail`), `.input`, `.hints`, `.hint`, `.key`, and the calendar's
 `.calendar`, `.head`, `.nav`, `.title`, `.weekday` (`.weekend`), `.day`
 (`.outside`, `.today`). The picker: `.picker`, `.head`, `.prompt`,
 `entry`, `.row` (`.selected`, `.child`), `.detail`.

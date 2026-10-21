@@ -1,7 +1,8 @@
-//! The notifications on screen: a layer-shell window at the top (left,
-//! centre or right, under the bar) holding one card per notification:
-//! the icon or image, the summary, the body, a progress bar when the app
-//! sends one, the actions as buttons. Left click activates (the app's
+//! The notifications on screen: a layer-shell window under the bar, at
+//! the right edge, holding one card per notification, the same `.card`
+//! as a module's (its width, frame, gap under the bar): the icon or
+//! image, the summary, the body, a progress bar when the app sends one,
+//! the actions as buttons. Left click activates (the app's
 //! default action, then its window), right click closes, middle click
 //! closes them all. The window is only mapped while something shows.
 
@@ -37,18 +38,16 @@ impl Notifier {
         window.set_layer(Layer::Overlay);
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(-1);
+        // placed like a module's card: right under the bar, the card's
+        // gap from the right edge; `.card { margin-top }` gives the gap
+        // under the bar and between the cards
         window.set_anchor(Edge::Top, true);
-        match cfg.notifications.position.as_str() {
-            "top-left" => window.set_anchor(Edge::Left, true),
-            "top-right" => window.set_anchor(Edge::Right, true),
-            _ => {}
-        }
-        window.set_margin(Edge::Top, cfg.bar.height + cfg.notifications.offset);
-        window.set_margin(Edge::Left, cfg.notifications.offset);
-        window.set_margin(Edge::Right, cfg.notifications.offset);
-        let list = gtk::Box::new(gtk::Orientation::Vertical, cfg.notifications.gap);
+        window.set_anchor(Edge::Right, true);
+        window.set_margin(Edge::Top, cfg.bar.height);
+        window.set_margin(Edge::Right, super::bar::GAP);
+        let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
         list.add_css_class("notifications");
-        list.set_size_request(cfg.notifications.width, -1);
+        list.set_size_request(cfg.bar.card_width, -1);
         window.set_child(Some(&list));
         Rc::new(Notifier {
             cfg,
@@ -92,6 +91,7 @@ impl Notifier {
     fn card(self: &Rc<Self>, n: &Note) -> gtk::Box {
         let size = self.cfg.notifications.icon_size;
         let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        card.add_css_class("card");
         card.add_css_class("notification");
         card.add_css_class(match n.urgency {
             0 => "low",
@@ -99,7 +99,6 @@ impl Notifier {
             _ => "normal",
         });
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        row.add_css_class("inner");
         if let Some(image) = n.image.as_ref().map(|i| image_widget(i, size)) {
             image.set_valign(gtk::Align::Start);
             row.append(&image);

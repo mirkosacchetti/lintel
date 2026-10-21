@@ -1,7 +1,9 @@
 //! The media player, natively, on playerctld: the active player is the
 //! one used last, `playerctld shift` cycles them. playerctld's
 //! PropertiesChanged (track, status, player list) and the sound server's
-//! stream events (the app's own volume) are the triggers.
+//! stream events (the app's own volume) are the triggers. A stopped player
+//! in front of one that plays or is paused (a browser tab gone quiet) is
+//! shifted away, so the bar, the keys and playerctl act on the same one.
 //!
 //! Emits `NAME` = {text, info, class}: the track as pango markup (italic
 //! when paused), and in the card the track, the album, the player and the
@@ -67,9 +69,9 @@ async fn follow(src: &Source, hub: &Hub, pulse: &Arc<Pulse>) -> Result<()> {
     }
 }
 
-async fn prop(conn: &Connection, iface: &str, name: &str) -> Option<OwnedValue> {
+async fn prop(conn: &Connection, dest: &str, iface: &str, name: &str) -> Option<OwnedValue> {
     let reply = conn
-        .call_method(Some(DEST), PATH, Some("org.freedesktop.DBus.Properties"), "Get", &(iface, name))
+        .call_method(Some(dest), PATH, Some("org.freedesktop.DBus.Properties"), "Get", &(iface, name))
         .await
         .ok()?;
     reply.body().deserialize::<Value>().ok().and_then(|v| v.try_to_owned().ok())
@@ -87,10 +89,26 @@ async fn read(conn: &Connection, pulse: &Arc<Pulse>) -> Result<serde_json::Value
     let empty = json!({"text": "", "info": "", "class": ""});
     // playerctld's list, the active one first, without the ".instance_N"
     // suffix browsers add
-    let names: Vec<String> = prop(conn, "com.github.altdesktop.playerctld", "PlayerNames")
+    let mut buses: Vec<String> = prop(conn, DEST, "com.github.altdesktop.playerctld", "PlayerNames")
         .await
         .and_then(|v| Vec::<String>::try_from(v).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // the first that plays or is paused, asked directly: a Shift per
+    // stopped player in front of it brings it to the front
+    let mut front = 0;
+    for (i, bus) in buses.iter().enumerate() {
+        let status = string(prop(conn, bus, "org.mpris.MediaPlayer2.Player", "PlaybackStatus").await);
+        if status == "Playing" || status == "Paused" {
+            front = i;
+            break;
+        }
+    }
+    for _ in 0..front {
+        conn.call_method(Some(DEST), PATH, Some("com.github.altdesktop.playerctld"), "Shift", &())
+            .await?;
+    }
+    buses.rotate_left(front);
+    let names: Vec<String> = buses
         .into_iter()
         .map(|n| {
             n.trim_start_matches("org.mpris.MediaPlayer2.")
@@ -101,11 +119,11 @@ async fn read(conn: &Connection, pulse: &Arc<Pulse>) -> Result<serde_json::Value
         })
         .collect();
     let Some(active) = names.first().cloned() else { return Ok(empty) };
-    let status = string(prop(conn, "org.mpris.MediaPlayer2.Player", "PlaybackStatus").await);
+    let status = string(prop(conn, DEST, "org.mpris.MediaPlayer2.Player", "PlaybackStatus").await);
     if status != "Playing" && status != "Paused" {
         return Ok(empty);
     }
-    let meta: HashMap<String, OwnedValue> = prop(conn, "org.mpris.MediaPlayer2.Player", "Metadata")
+    let meta: HashMap<String, OwnedValue> = prop(conn, DEST, "org.mpris.MediaPlayer2.Player", "Metadata")
         .await
         .and_then(|v| HashMap::try_from(v).ok())
         .unwrap_or_default();
@@ -138,7 +156,7 @@ async fn read(conn: &Connection, pulse: &Arc<Pulse>) -> Result<serde_json::Value
     // the app's own stream, else the player's MPRIS volume
     let volume = match stream_of(&active, pulse).await {
         Some(s) => Some(format!("{}%{}", s.volume, if s.muted { " (muted)" } else { "" })),
-        None => prop(conn, "org.mpris.MediaPlayer2.Player", "Volume")
+        None => prop(conn, DEST, "org.mpris.MediaPlayer2.Player", "Volume")
             .await
             .and_then(|v| f64::try_from(v).ok())
             .map(|v| format!("{}% (player)", (v * 100.0).round() as i64)),
