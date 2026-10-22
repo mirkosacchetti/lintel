@@ -8,6 +8,7 @@
 //! Nothing polls: items announce themselves and their changes, the bus
 //! tells us when one goes away.
 
+use super::picker;
 use super::Hub;
 use anyhow::{bail, Context, Result};
 use futures_util::StreamExt;
@@ -394,6 +395,36 @@ async fn watch_item(proxy: Proxy<'static>, key: String, hub: Hub, dead: mpsc::Un
     }
 }
 
+/// The item's own window, when it is not on screen (hidden in the
+/// scratchpad, or on another workspace): brought up through sway, the
+/// way the picker does it, and Activate is not sent. An app cannot raise
+/// itself on Wayland without an activation token from the clicking
+/// client, and the bar has none to give: Telegram's Activate only turned
+/// its hidden window urgent. The app is the item's bus name's process; a
+/// window on screen is left to Activate (Telegram hides it: a toggle).
+async fn raise_window(t: &Tracked, key: &str) -> bool {
+    let Ok(dbus) = zbus::fdo::DBusProxy::new(t.proxy.connection()).await else {
+        return false;
+    };
+    let Ok(pid) = dbus.get_connection_unix_process_id(t.proxy.destination().clone()).await else {
+        return false;
+    };
+    let Ok(windows) = picker::windows().await else {
+        return false;
+    };
+    let mine: Vec<&picker::Window> = windows.iter().filter(|w| w.pid as u32 == pid).collect();
+    if mine.is_empty() || mine.iter().any(|w| w.visible) {
+        return false;
+    }
+    match picker::focus(mine[0], &t.hub).await {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("tray: {key}: raising its window: {e}");
+            false
+        }
+    }
+}
+
 async fn name_has_owner(proxy: &Proxy<'static>) -> bool {
     let Ok(dbus) = zbus::fdo::DBusProxy::new(proxy.connection()).await else {
         return true;
@@ -571,7 +602,14 @@ fn child_layout(v: &OwnedValue) -> Option<Layout> {
 
 async fn dispatch(items: &HashMap<String, Tracked>, cmd: TrayCommand) {
     let (key, method, args): (&str, &str, (i32, i32)) = match &cmd {
-        TrayCommand::Activate { key, x, y } => (key, "Activate", (*x, *y)),
+        TrayCommand::Activate { key, x, y } => {
+            if let Some(t) = items.get(key) {
+                if raise_window(t, key).await {
+                    return;
+                }
+            }
+            (key, "Activate", (*x, *y))
+        }
         TrayCommand::SecondaryActivate { key, x, y } => (key, "SecondaryActivate", (*x, *y)),
         TrayCommand::ContextMenu { key, x, y } => (key, "ContextMenu", (*x, *y)),
         TrayCommand::Scroll { key, delta, orientation } => {

@@ -222,6 +222,10 @@ pub struct Window {
     pub workspace: String,
     pub title: String,
     pub scratchpad: bool,
+    pub pid: i32,
+    /// On screen now (a hidden scratchpad window or one on another
+    /// workspace is not).
+    pub visible: bool,
 }
 
 pub async fn windows() -> Result<Vec<Window>> {
@@ -243,9 +247,11 @@ pub async fn windows() -> Result<Vec<Window>> {
         } else {
             ws.to_string()
         };
-        if n.pid.is_some() {
+        if let Some(pid) = n.pid {
             out.push(Window {
                 id: n.id,
+                pid,
+                visible: n.visible.unwrap_or(false),
                 app: n
                     .app_id
                     .clone()

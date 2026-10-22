@@ -148,7 +148,10 @@ Icons come from the theme or the item's pixmaps, scaled for the output.
 Left click activates (or opens the menu of a menu-only item), middle
 click is the secondary action, right click the menu, read from the
 item's dbusmenu when needed, the wheel scrolls. `Passive` items are
-hidden.
+hidden. When the item's app has a window and none of them is on screen
+(hidden in the scratchpad, on another workspace), a left click brings
+one up through sway instead of activating: an app cannot raise itself
+on Wayland without a token, it would only turn urgent.
 
 ### The picker
 
